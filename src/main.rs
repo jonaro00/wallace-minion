@@ -9,7 +9,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group, hook};
-use serenity::framework::standard::{CommandResult, StandardFramework};
+use serenity::framework::standard::{CommandResult, StandardFramework, Args};
 use serenity::http::Http;
 use serenity::model::prelude::{Activity, Guild, GuildId, Message, Ready};
 use serenity::prelude::*;
@@ -123,7 +123,8 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!").owners(owners))
         .unrecognised_command(unknown_command)
-        .group(&GENERAL_GROUP);
+        .group(&GENERAL_GROUP)
+        .group(&COOLTEXT_GROUP);
     let mut client = Client::builder(
         token,
         GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
@@ -272,6 +273,85 @@ async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
         .say(ctx, "Removed server to receive random names every night")
         .await?;
     Ok(())
+}
+
+#[group]
+#[commands(cooltext)]
+struct CoolText;
+
+#[command]
+#[aliases(ct)]
+#[sub_commands(boldfraktur, bold, bolditalic, boldscript, monospace)]
+async fn cooltext(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldFraktur)).await?; // default
+    Ok(())
+}
+#[command]
+#[aliases(bf)]
+async fn boldfraktur(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldFraktur)).await?;
+    Ok(())
+}
+#[command]
+#[aliases(b)]
+async fn bold(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::Bold)).await?;
+    Ok(())
+}
+#[command]
+#[aliases(bi)]
+async fn bolditalic(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldItalic)).await?;
+    Ok(())
+}
+#[command]
+#[aliases(bs)]
+async fn boldscript(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldScript)).await?;
+    Ok(())
+}
+#[command]
+#[aliases(m)]
+async fn monospace(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::Monospace)).await?;
+    Ok(())
+}
+enum CoolTextTypes {
+    BoldFraktur,
+    Bold,
+    BoldItalic,
+    BoldScript,
+    Monospace,
+}
+fn cool_text_bases(variant: CoolTextTypes) -> Bases {
+    match variant {
+        CoolTextTypes::BoldFraktur => (Some(0x1D56C), Some(0x1D586), None),
+        CoolTextTypes::Bold => (Some(0x1D400), Some(0x1D41A), Some(0x1D7CE)),
+        CoolTextTypes::BoldItalic => (Some(0x1D468), Some(0x1D482), None),
+        CoolTextTypes::BoldScript => (Some(0x1D4D0), Some(0x1D4EA), None),
+        CoolTextTypes::Monospace => (Some(0x1D670), Some(0x1D68A), Some(0x1D7F6)),
+    }
+}
+type Bases = (Option<u32>, Option<u32>, Option<u32>); // upper, lower, numeric
+const ASCII_BASES: Bases = (Some(0x41), Some(0x61), Some(0x30));
+fn to_cool_text(text: &str, variant: CoolTextTypes) -> String {
+    let offsets = cool_text_bases(variant);
+    let mut s = String::new();
+    for c in text.chars() {
+        if c.is_ascii_uppercase() && offsets.0.is_some() {
+            s.push(char::from_u32((c as u32) - ASCII_BASES.0.unwrap() + offsets.0.unwrap()).unwrap_or_else(|| c));
+        }
+        else if c.is_ascii_lowercase() && offsets.1.is_some() {
+            s.push(char::from_u32((c as u32) - ASCII_BASES.1.unwrap() + offsets.1.unwrap()).unwrap_or_else(|| c));
+        }
+        else if c.is_ascii_digit() && offsets.2.is_some() {
+            s.push(char::from_u32((c as u32) - ASCII_BASES.2.unwrap() + offsets.2.unwrap()).unwrap_or_else(|| c));
+        }
+        else {
+            s.push(c);
+        }
+    }
+    s
 }
 
 fn get_time() -> OffsetDateTime {
