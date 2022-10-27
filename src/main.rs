@@ -262,10 +262,7 @@ async fn set_server_name(
 #[required_permissions("ADMINISTRATOR")]
 async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
     let mut s = SetStore::new(PathBuf::from(GUILD_FILE))?;
-    if let Err(_) = s.insert(msg.guild(ctx).unwrap().id.0) {
-        msg.channel_id.say(ctx, "Epic fail in the system").await?;
-        return Ok(());
-    };
+    s.insert(msg.guild(ctx).unwrap().id.0)?;
     msg.channel_id
         .say(ctx, "Added server to receive random names every night")
         .await?;
@@ -277,10 +274,7 @@ async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
 #[required_permissions("ADMINISTRATOR")]
 async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
     let mut s = SetStore::new(PathBuf::from(GUILD_FILE))?;
-    if let Err(_) = s.remove(msg.guild(ctx).unwrap().id.0) {
-        msg.channel_id.say(ctx, "Epic fail in the system").await?;
-        return Ok(());
-    };
+    s.remove(msg.guild(ctx).unwrap().id.0)?;
     msg.channel_id
         .say(ctx, "Removed server to receive random names every night")
         .await?;
@@ -291,10 +285,11 @@ const TIMEOUT_LENGTH_SECONDS: i64 = 60;
 #[command]
 #[aliases(hammer, timeout)]
 #[only_in(guilds)]
-#[num_args(1)]
+#[min_args(1)]
 #[required_permissions("ADMINISTRATOR")]
 // #[required_role("BigBrother")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let gid = msg.guild_id.ok_or("Failed to get guild")?;
     loop {
         if args.is_empty() {
             break;
@@ -302,13 +297,11 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         let arg = args.single::<String>()?;
         let uid = arg
             .strip_prefix("<@")
-            .ok_or_else(|| "Incorrect arg format")?
-            .strip_suffix(">")
-            .ok_or_else(|| "Incorrect arg format")?
+            .ok_or("Incorrect arg format")?
+            .strip_suffix('>')
+            .ok_or("Incorrect arg format")?
             .parse::<u64>()?;
-        msg.guild_id
-            .ok_or_else(|| "Failed to get guild")?
-            .edit_member(ctx, UserId { 0: uid }, |m| {
+            gid.edit_member(ctx, UserId(uid), |m| {
                 m.disable_communication_until(
                     Timestamp::now()
                         .checked_add_signed(chrono::Duration::seconds(TIMEOUT_LENGTH_SECONDS))
@@ -410,18 +403,15 @@ fn to_cool_text(text: &str, font: CoolTextFont) -> String {
     for c in text.chars() {
         if c.is_ascii_uppercase() && bases.0.is_some() {
             s.push(
-                char::from_u32((c as u32) - ASCII_BASES.0.unwrap() + bases.0.unwrap())
-                    .unwrap_or_else(|| c),
+                char::from_u32((c as u32) - ASCII_BASES.0.unwrap() + bases.0.unwrap()).unwrap_or(c),
             );
         } else if c.is_ascii_lowercase() && bases.1.is_some() {
             s.push(
-                char::from_u32((c as u32) - ASCII_BASES.1.unwrap() + bases.1.unwrap())
-                    .unwrap_or_else(|| c),
+                char::from_u32((c as u32) - ASCII_BASES.1.unwrap() + bases.1.unwrap()).unwrap_or(c),
             );
         } else if c.is_ascii_digit() && bases.2.is_some() {
             s.push(
-                char::from_u32((c as u32) - ASCII_BASES.2.unwrap() + bases.2.unwrap())
-                    .unwrap_or_else(|| c),
+                char::from_u32((c as u32) - ASCII_BASES.2.unwrap() + bases.2.unwrap()).unwrap_or(c),
             );
         } else {
             s.push(c);
