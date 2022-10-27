@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -11,3 +11,4 @@ tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
 rand = "0.8"
 dotenv = "0.15"
 time = { version = "0.3", features = ["local-offset"] }
+chrono = { version = "0.4", default-features = false }

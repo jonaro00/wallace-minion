@@ -3,18 +3,20 @@ mod set_store;
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group, hook};
-use serenity::framework::standard::{CommandResult, StandardFramework, Args};
+use serenity::framework::standard::{
+    Args, CommandError, CommandResult, DispatchError, StandardFramework,
+};
 use serenity::http::Http;
-use serenity::model::prelude::{Activity, Guild, GuildId, Message, Ready};
+use serenity::model::prelude::{Activity, Guild, GuildId, Message, Ready, UserId};
+use serenity::model::Timestamp;
 use serenity::prelude::*;
 use time::{OffsetDateTime, Weekday};
-use tokio::time::sleep;
+use tokio::time::{interval, Duration};
 
 use set_store::SetStore;
 
@@ -122,7 +124,9 @@ async fn main() {
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!").owners(owners))
-        .unrecognised_command(unknown_command)
+        .unrecognised_command(unknown_command_hook)
+        .after(after_hook)
+        .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
         .group(&COOLTEXT_GROUP);
     let mut client = Client::builder(
@@ -145,6 +149,7 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
+        println!("Loaded guilds! ({})", guilds.len());
         tokio::spawn(schedule_loop(ctx, guilds)).await.unwrap();
     }
 
@@ -155,7 +160,7 @@ impl EventHandler for Handler {
 }
 
 #[hook]
-async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name: &str) {
+async fn unknown_command_hook(ctx: &Context, msg: &Message, unknown_command_name: &str) {
     let _ = msg
         .channel_id
         .say(
@@ -165,25 +170,44 @@ async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name: &st
         .await;
 }
 
-async fn admin_command_check(ctx: &Context, msg: &Message) -> bool {
-    let guild = msg.guild(ctx).unwrap();
-    match guild.member_permissions(ctx, &msg.author.id).await {
-        Ok(perms) => {
-            if perms.administrator() {
-                return true;
-            }
+#[hook]
+async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Result<(), CommandError>) {
+    if let Err(why) = error {
+        println!("[{}] Error in {}: {:?}", get_time(), cmd_name, why);
+        let _ = msg
+            .channel_id
+            .say(ctx, "I did a bit on an epic fail there... 😕")
+            .await;
+    }
+}
+
+#[hook]
+async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, cmd_name: &str) {
+    let s = match err {
+        DispatchError::NotEnoughArguments { min, given } => {
+            format!("Need {} arguments, but only got {} 😋", min, given)
         }
-        Err(e) => println!(
-            "Error getting permissions for user {}: {}",
-            &msg.author.id, e
-        ),
+        DispatchError::TooManyArguments { max, given } => {
+            format!("Max arguments allowed is {}, but got {} 😋", max, given)
+        }
+        DispatchError::LackingPermissions(_perm) => "You can't do that 😋".to_owned(),
+        DispatchError::LackingRole => "You can't do that 😋".to_owned(),
+        DispatchError::OnlyForGuilds => "That can only be done in servers 😋".to_owned(),
+        _ => {
+            println!(
+                "[{}] Unhandled dispatch error in {}. {:?}",
+                get_time(),
+                cmd_name,
+                err
+            );
+            "Idk man, this seems kinda sus to me... :AMOGUS:".to_owned()
+        }
     };
-    let _ = msg.channel_id.say(&ctx.http, "You can't do that 😛").await;
-    false
+    let _ = msg.channel_id.say(ctx, &s).await;
 }
 
 #[group]
-#[commands(ping, defaultname, randomname, randomnameon, randomnameoff)]
+#[commands(ping, defaultname, randomname, randomnameon, randomnameoff, bonk)]
 struct General;
 
 #[command]
@@ -200,19 +224,13 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 // #[required_permissions("ADMINISTRATOR")]
 async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
-    if !admin_command_check(ctx, msg).await {
-        return Ok(());
-    }
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), GUILD_DEFAULT_NAME).await
 }
 
 #[command]
 #[only_in(guilds)]
-// #[required_permissions("ADMINISTRATOR")]
+#[required_permissions("ADMINISTRATOR")]
 async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
-    if !admin_command_check(ctx, msg).await {
-        return Ok(());
-    }
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name()).await
 }
 
@@ -241,11 +259,8 @@ async fn set_server_name(
 
 #[command]
 #[only_in(guilds)]
-// #[required_permissions("ADMINISTRATOR")]
+#[required_permissions("ADMINISTRATOR")]
 async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
-    if !admin_command_check(ctx, msg).await {
-        return Ok(());
-    }
     let mut s = SetStore::new(PathBuf::from(GUILD_FILE))?;
     if let Err(_) = s.insert(msg.guild(ctx).unwrap().id.0) {
         msg.channel_id.say(ctx, "Epic fail in the system").await?;
@@ -259,11 +274,8 @@ async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[only_in(guilds)]
-// #[required_permissions("ADMINISTRATOR")]
+#[required_permissions("ADMINISTRATOR")]
 async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
-    if !admin_command_check(ctx, msg).await {
-        return Ok(());
-    }
     let mut s = SetStore::new(PathBuf::from(GUILD_FILE))?;
     if let Err(_) = s.remove(msg.guild(ctx).unwrap().id.0) {
         msg.channel_id.say(ctx, "Epic fail in the system").await?;
@@ -275,6 +287,52 @@ async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+const TIMEOUT_LENGTH_SECONDS: i64 = 60;
+#[command]
+#[aliases(hammer, timeout)]
+#[only_in(guilds)]
+#[num_args(1)]
+#[required_permissions("ADMINISTRATOR")]
+// #[required_role("BigBrother")]
+async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    loop {
+        if args.is_empty() {
+            break;
+        }
+        let arg = args.single::<String>()?;
+        let uid = arg
+            .strip_prefix("<@")
+            .ok_or_else(|| "Incorrect arg format")?
+            .strip_suffix(">")
+            .ok_or_else(|| "Incorrect arg format")?
+            .parse::<u64>()?;
+        msg.guild_id
+            .ok_or_else(|| "Failed to get guild")?
+            .edit_member(ctx, UserId { 0: uid }, |m| {
+                m.disable_communication_until(
+                    Timestamp::now()
+                        .checked_add_signed(chrono::Duration::seconds(TIMEOUT_LENGTH_SECONDS))
+                        .expect("Failed to add date")
+                        .to_rfc3339(),
+                )
+            })
+            .await?;
+        let _ = msg
+            .channel_id
+            .say(
+                ctx,
+                format!(
+                    "{}🔨🙂 Timed out <@{}> for {} seconds.",
+                    to_cool_text("BONK!", CoolTextFont::BoldScript),
+                    uid,
+                    TIMEOUT_LENGTH_SECONDS
+                ),
+            )
+            .await;
+    }
+    Ok(())
+}
+
 #[group]
 #[commands(cooltext)]
 struct CoolText;
@@ -282,72 +340,90 @@ struct CoolText;
 #[command]
 #[aliases(ct)]
 #[sub_commands(boldfraktur, bold, bolditalic, boldscript, monospace)]
+#[min_args(1)]
 async fn cooltext(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldFraktur)).await?; // default
+    do_cool_text(ctx, msg, &args, CoolTextFont::BoldFraktur).await?; // default
     Ok(())
 }
 #[command]
 #[aliases(bf)]
 async fn boldfraktur(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldFraktur)).await?;
+    do_cool_text(ctx, msg, &args, CoolTextFont::BoldFraktur).await?;
     Ok(())
 }
 #[command]
 #[aliases(b)]
 async fn bold(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::Bold)).await?;
+    do_cool_text(ctx, msg, &args, CoolTextFont::Bold).await?;
     Ok(())
 }
 #[command]
 #[aliases(bi)]
 async fn bolditalic(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldItalic)).await?;
+    do_cool_text(ctx, msg, &args, CoolTextFont::BoldItalic).await?;
     Ok(())
 }
 #[command]
 #[aliases(bs)]
 async fn boldscript(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::BoldScript)).await?;
+    do_cool_text(ctx, msg, &args, CoolTextFont::BoldScript).await?;
     Ok(())
 }
 #[command]
 #[aliases(m)]
 async fn monospace(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.reply(ctx, to_cool_text(args.rest(), CoolTextTypes::Monospace)).await?;
+    do_cool_text(ctx, msg, &args, CoolTextFont::Monospace).await?;
     Ok(())
 }
-enum CoolTextTypes {
+async fn do_cool_text(
+    ctx: &Context,
+    msg: &Message,
+    args: &Args,
+    font: CoolTextFont,
+) -> CommandResult {
+    msg.channel_id
+        .say(ctx, to_cool_text(args.rest(), font))
+        .await?;
+    Ok(())
+}
+enum CoolTextFont {
     BoldFraktur,
     Bold,
     BoldItalic,
     BoldScript,
     Monospace,
 }
-fn cool_text_bases(variant: CoolTextTypes) -> Bases {
-    match variant {
-        CoolTextTypes::BoldFraktur => (Some(0x1D56C), Some(0x1D586), None),
-        CoolTextTypes::Bold => (Some(0x1D400), Some(0x1D41A), Some(0x1D7CE)),
-        CoolTextTypes::BoldItalic => (Some(0x1D468), Some(0x1D482), None),
-        CoolTextTypes::BoldScript => (Some(0x1D4D0), Some(0x1D4EA), None),
-        CoolTextTypes::Monospace => (Some(0x1D670), Some(0x1D68A), Some(0x1D7F6)),
+fn cool_text_bases(font: CoolTextFont) -> Bases {
+    match font {
+        CoolTextFont::BoldFraktur => (Some(0x1D56C), Some(0x1D586), None),
+        CoolTextFont::Bold => (Some(0x1D400), Some(0x1D41A), Some(0x1D7CE)),
+        CoolTextFont::BoldItalic => (Some(0x1D468), Some(0x1D482), None),
+        CoolTextFont::BoldScript => (Some(0x1D4D0), Some(0x1D4EA), None),
+        CoolTextFont::Monospace => (Some(0x1D670), Some(0x1D68A), Some(0x1D7F6)),
     }
 }
 type Bases = (Option<u32>, Option<u32>, Option<u32>); // upper, lower, numeric
 const ASCII_BASES: Bases = (Some(0x41), Some(0x61), Some(0x30));
-fn to_cool_text(text: &str, variant: CoolTextTypes) -> String {
-    let offsets = cool_text_bases(variant);
+fn to_cool_text(text: &str, font: CoolTextFont) -> String {
+    let bases = cool_text_bases(font);
     let mut s = String::new();
     for c in text.chars() {
-        if c.is_ascii_uppercase() && offsets.0.is_some() {
-            s.push(char::from_u32((c as u32) - ASCII_BASES.0.unwrap() + offsets.0.unwrap()).unwrap_or_else(|| c));
-        }
-        else if c.is_ascii_lowercase() && offsets.1.is_some() {
-            s.push(char::from_u32((c as u32) - ASCII_BASES.1.unwrap() + offsets.1.unwrap()).unwrap_or_else(|| c));
-        }
-        else if c.is_ascii_digit() && offsets.2.is_some() {
-            s.push(char::from_u32((c as u32) - ASCII_BASES.2.unwrap() + offsets.2.unwrap()).unwrap_or_else(|| c));
-        }
-        else {
+        if c.is_ascii_uppercase() && bases.0.is_some() {
+            s.push(
+                char::from_u32((c as u32) - ASCII_BASES.0.unwrap() + bases.0.unwrap())
+                    .unwrap_or_else(|| c),
+            );
+        } else if c.is_ascii_lowercase() && bases.1.is_some() {
+            s.push(
+                char::from_u32((c as u32) - ASCII_BASES.1.unwrap() + bases.1.unwrap())
+                    .unwrap_or_else(|| c),
+            );
+        } else if c.is_ascii_digit() && bases.2.is_some() {
+            s.push(
+                char::from_u32((c as u32) - ASCII_BASES.2.unwrap() + bases.2.unwrap())
+                    .unwrap_or_else(|| c),
+            );
+        } else {
             s.push(c);
         }
     }
@@ -355,11 +431,12 @@ fn to_cool_text(text: &str, variant: CoolTextTypes) -> String {
 }
 
 fn get_time() -> OffsetDateTime {
-    OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
+    OffsetDateTime::now_utc()
 }
 
 async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
     let mut prev_time = get_time();
+    let mut interval = interval(Duration::from_secs(60));
     loop {
         let time = get_time();
         let day = time.weekday();
@@ -371,7 +448,7 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
         if hour != prev_time.hour() {}
         if minute != prev_time.minute() {}
         prev_time = time;
-        sleep(Duration::from_secs(60)).await;
+        interval.tick().await;
     }
 }
 
