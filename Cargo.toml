@@ -1,14 +1,16 @@
 [package]
 name = "wallace-minion"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 serenity = "0.11"
-tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread", "time"] }
 rand = "0.8"
 dotenv = "0.15"
 time = { version = "0.3", features = ["local-offset"] }
 chrono = { version = "0.4", default-features = false }
+reqwest = { version = "0.11", features = ["json", "gzip"] } # sudo apt-get install pkg-config libssl-dev # https://docs.rs/openssl/latest/openssl/index.html#automatic
+serde = "1.0"

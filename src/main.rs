@@ -3,20 +3,27 @@ mod set_store;
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use chrono::Duration as cDuration;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{Client as HttpClient, ClientBuilder, Url};
+use serde::Deserialize;
 use serenity::async_trait;
+use serenity::client::{Client as DiscordClient, Context, EventHandler};
 use serenity::framework::standard::macros::{command, group, hook};
 use serenity::framework::standard::{
     Args, CommandError, CommandResult, DispatchError, StandardFramework,
 };
 use serenity::http::Http;
-use serenity::model::prelude::{Activity, Guild, GuildId, Message, Ready, UserId};
-use serenity::model::Timestamp;
-use serenity::prelude::*;
+use serenity::model::prelude::{
+    Activity, GatewayIntents, Guild, GuildId, Message, Ready, Timestamp, UserId,
+};
+use serenity::prelude::TypeMapKey;
 use time::{OffsetDateTime, Weekday};
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, Duration as tDuration};
 
 use set_store::SetStore;
 
@@ -98,14 +105,21 @@ const GUILD_NAME_OBJECTS: [&str; 34] = [
     "Trädgårds",
 ];
 
+struct RiotToken;
+impl TypeMapKey for RiotToken {
+    type Value = Arc<String>;
+}
+
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
 
-    let token =
+    let discord_token =
         env::var("DISCORD_TOKEN").expect("Discord token missing! (env variable `DISCORD_TOKEN`)");
+    let riot_token =
+        env::var("RIOT_TOKEN").expect("Riot token missing! (env variable `RIOT_TOKEN`)");
 
-    let http = Http::new(&token);
+    let http = Http::new(&discord_token);
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
             let mut owners = HashSet::new();
@@ -128,15 +142,23 @@ async fn main() {
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
-        .group(&COOLTEXT_GROUP);
-    let mut client = Client::builder(
-        token,
+        .group(&COOLTEXT_GROUP)
+        .group(&LOL_GROUP);
+    let mut client = DiscordClient::builder(
+        discord_token,
         GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
     )
     .event_handler(Handler)
     .framework(framework)
     .await
     .expect("Error creating client");
+
+    // Insert shared data
+    {
+        // Open the data lock in write mode, so keys can be inserted to it.
+        let mut data = client.data.write().await;
+        data.insert::<RiotToken>(Arc::new(riot_token));
+    } // Release lock
 
     // start listening for events by starting a single shard
     if let Err(why) = client.start().await {
@@ -222,7 +244,6 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[only_in(guilds)]
-// #[required_permissions("ADMINISTRATOR")]
 async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), GUILD_DEFAULT_NAME).await
 }
@@ -301,15 +322,15 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             .strip_suffix('>')
             .ok_or("Incorrect arg format")?
             .parse::<u64>()?;
-            gid.edit_member(ctx, UserId(uid), |m| {
-                m.disable_communication_until(
-                    Timestamp::now()
-                        .checked_add_signed(chrono::Duration::seconds(TIMEOUT_LENGTH_SECONDS))
-                        .expect("Failed to add date")
-                        .to_rfc3339(),
-                )
-            })
-            .await?;
+        gid.edit_member(ctx, UserId(uid), |m| {
+            m.disable_communication_until(
+                Timestamp::now()
+                    .checked_add_signed(chrono::Duration::seconds(TIMEOUT_LENGTH_SECONDS))
+                    .expect("Failed to add date")
+                    .to_rfc3339(),
+            )
+        })
+        .await?;
         let _ = msg
             .channel_id
             .say(
@@ -420,13 +441,183 @@ fn to_cool_text(text: &str, font: CoolTextFont) -> String {
     s
 }
 
+#[derive(Debug, Deserialize)]
+struct SummonerDTO {
+    // accountId: String,
+    // profileIconId: i32,
+    // revisionDate: i64,
+    // name: String,
+    // id: String,
+    puuid: String,
+    // summonerLevel: i64,
+}
+#[derive(Debug, Deserialize)]
+struct MatchDTO {
+    info: InfoDTO,
+}
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct InfoDTO {
+    gameDuration: i64,
+}
+#[derive(Debug, Deserialize)]
+struct TFTMatchDTO {
+    info: TFTInfoDTO,
+}
+#[derive(Debug, Deserialize)]
+struct TFTInfoDTO {
+    // game_length: f32,
+    participants: Vec<TFTParticipantDTO>,
+}
+#[derive(Debug, Deserialize)]
+struct TFTParticipantDTO {
+    puuid: String,
+    time_eliminated: f32,
+}
+
+type MatchesList = Vec<String>;
+
+#[group]
+#[commands(lol)]
+struct LoL;
+
+#[command]
+#[sub_commands(playtime)]
+async fn lol(_ctx: &Context, _msg: &Message, _args: Args) -> CommandResult {
+    Err(Box::new(serenity::Error::Other("Not implemented")))
+}
+#[command]
+#[aliases(pt)]
+#[min_args(1)]
+async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let riot_token = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<RiotToken>()
+            .expect("Expected RiotToken in TypeMap.")
+            .clone()
+    };
+    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let mut headers = HeaderMap::new();
+    headers.insert("X-Riot-Token", HeaderValue::from_str(&riot_token).unwrap());
+    let client = ClientBuilder::new()
+        .default_headers(headers)
+        .build()
+        .unwrap();
+    let mut s = String::new();
+    for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
+        let a = arg.trim_matches('"').split_once(':');
+        if a.is_none() {
+            s.push_str(&format!("Incorrect format: {arg}\n"));
+            continue;
+        }
+        let (server, name) = a.unwrap();
+        let puuid = match get_summoner(&client, server, name).await {
+            Ok(SummonerDTO { puuid }) => puuid,
+            Err(err) => {
+                s.push_str(&format!(
+                    "Couldn't find summmoner {name} on {server}: {err}\n"
+                ));
+                continue;
+            }
+        };
+        let (amount, mut secs) = get_playtime(&client, &puuid).await?;
+        let hrs = secs / 3600;
+        secs -= 3600 * hrs;
+        let mins = secs / 60;
+        secs -= 60 * mins;
+        s.push_str(&format!("[{server}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. 🤨\n"));
+    }
+    if let Ok(typing) = typing {
+        let _ = typing.stop();
+    }
+    msg.channel_id.say(ctx, s).await?;
+    Ok(())
+}
+
+async fn get_summoner(
+    client: &HttpClient,
+    server: &str,
+    summoner_name: &str,
+) -> CommandResult<SummonerDTO> {
+    let serv_id = match server {
+        "EUW" => "euw1",
+        "EUNE" => "eun1",
+        _ => return Err(Box::new(serenity::Error::Other("Invalid server"))),
+    };
+    Ok(client
+        .get(
+            Url::parse(&format!(
+            "https://{serv_id}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}"
+            ))
+            .unwrap(),
+        )
+        .send()
+        .await?
+        .json::<SummonerDTO>()
+        .await?)
+}
+
+async fn get_playtime(client: &HttpClient, puuid: &str) -> CommandResult<(usize, i64)> {
+    let now = Timestamp::now();
+    let then = now.checked_sub_signed(cDuration::weeks(1)).unwrap();
+    let nowts = now.timestamp();
+    let thents = then.timestamp();
+    let mut secs = 0;
+    let lol_matches = client.get(
+        format!(
+            "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?startTime={thents}&endTime={nowts}&start=0&count=100"
+        ))
+        .send()
+        .await?
+        .json::<MatchesList>()
+        .await?;
+    for m_id in &lol_matches {
+        let mtch = client
+            .get(format!(
+                "https://europe.api.riotgames.com/lol/match/v5/matches/{m_id}"
+            ))
+            .send()
+            .await?
+            .json::<MatchDTO>()
+            .await?;
+        secs += mtch.info.gameDuration;
+    }
+    let tft_matches = client
+        .get(format!(
+            "https://europe.api.riotgames.com/tft/match/v1/matches/by-puuid/{puuid}/ids?startTime={thents}&endTime={nowts}&start=0&count=100"
+        ))
+        .send()
+        .await?
+        .json::<MatchesList>()
+        .await?;
+    for m_id in &tft_matches {
+        let mtch = client
+            .get(format!(
+                "https://europe.api.riotgames.com/tft/match/v1/matches/{m_id}"
+            ))
+            .send()
+            .await?
+            .json::<TFTMatchDTO>()
+            .await?;
+        secs += mtch
+            .info
+            .participants
+            .iter()
+            .find(|p| p.puuid == puuid)
+            .unwrap()
+            .time_eliminated as i64;
+    }
+    Ok((lol_matches.len() + tft_matches.len(), secs))
+}
+
 fn get_time() -> OffsetDateTime {
     OffsetDateTime::now_utc()
 }
 
 async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
     let mut prev_time = get_time();
-    let mut interval = interval(Duration::from_secs(60));
+    let mut interval = interval(tDuration::from_secs(60));
     loop {
         let time = get_time();
         let day = time.weekday();
