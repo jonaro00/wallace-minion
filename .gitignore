@@ -1,3 +1,4 @@
 /target
 .env
-active_guilds.txt
+name_change_guilds.txt
+weekly_report_members.txt
