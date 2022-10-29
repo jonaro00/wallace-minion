@@ -1,4 +1,4 @@
 /target
 .env
 name_change_guilds.txt
-weekly_report_members.txt
+weekly_report_members.json

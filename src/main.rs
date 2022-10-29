@@ -167,8 +167,8 @@ async fn main() {
     }
 }
 
+const REACTIONS: [char; 4] = ['😳', '😏', '😊', '😎'];
 struct Handler;
-
 #[async_trait]
 impl EventHandler for Handler {
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
@@ -179,6 +179,15 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data: Ready) {
         println!("{} is connected!", data.user.name);
         let _ = ctx.set_activity(Activity::watching("you 🔨🙂")).await;
+    }
+
+    async fn message(&self, ctx: Context, msg: Message) {
+        if msg.content.to_uppercase().contains("WALLACE") {
+            let mut rng: StdRng = SeedableRng::from_entropy();
+            let _ = msg
+                .react(ctx, REACTIONS[rng.gen_range(0..REACTIONS.len())])
+                .await;
+        }
     }
 }
 
@@ -223,14 +232,22 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
                 cmd_name,
                 err
             );
-            "Idk man, this seems kinda sus to me... :AMOGUS:".to_owned()
+            "Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned()
         }
     };
     let _ = msg.channel_id.say(ctx, &s).await;
 }
 
 #[group]
-#[commands(ping, defaultname, randomname, randomnameon, randomnameoff, bonk)]
+#[commands(
+    ping,
+    power,
+    defaultname,
+    randomname,
+    randomnameon,
+    randomnameoff,
+    bonk
+)]
 struct General;
 
 #[command]
@@ -238,8 +255,15 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     if msg.author.id.to_string() == "224233166024474635" {
         let _ = msg.react(ctx, '👑').await;
     }
-    let _ = msg.react(ctx, '👍').await;
-    msg.channel_id.say(ctx, "Pong!").await?;
+    let _ = tokio::join!(msg.react(ctx, '👍'), msg.channel_id.say(ctx, "Pong!"),);
+    Ok(())
+}
+
+#[command]
+async fn power(ctx: &Context, msg: &Message) -> CommandResult {
+    msg.channel_id
+        .say(ctx, "https://youtu.be/wjr6LKJOyxY")
+        .await?;
     Ok(())
 }
 
@@ -442,10 +466,11 @@ fn to_cool_text(text: &str, font: CoolTextFont) -> String {
     s
 }
 
-const WEEKLY_REPORT_MEMBERS_FILE: &str = "weekly_report_members.txt";
+const WEEKLY_REPORT_MEMBERS_FILE: &str = "weekly_report_members.json";
 type LoLAccount = (String, String);
 type AccountList = Vec<LoLAccount>;
-type WeeklyReportMembers = HashMap<String, AccountList>;
+type GuildWeeklyReportMembers = HashMap<String, AccountList>;
+type WeeklyReportMembers = HashMap<u64, GuildWeeklyReportMembers>;
 fn load_members() -> Result<WeeklyReportMembers, String> {
     let p = Path::new(WEEKLY_REPORT_MEMBERS_FILE);
     if !p.is_file() {
@@ -522,9 +547,14 @@ async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
 #[min_args(2)]
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let mut m = load_members()?;
+    let channel = msg.channel_id.0;
     let member = args.current().unwrap().to_owned();
-    if !m.contains_key(&member) {
-        m.insert(member.clone(), Vec::<LoLAccount>::new());
+    if !m.contains_key(&channel) {
+        m.insert(channel.clone(), GuildWeeklyReportMembers::new());
+    }
+    let cm = m.get_mut(&channel).unwrap();
+    if !cm.contains_key(&member) {
+        cm.insert(member.clone(), AccountList::new());
     }
     args.advance();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
@@ -538,7 +568,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 return Ok(());
             }
         };
-        m.get_mut(&member)
+        cm.get_mut(&member)
             .unwrap()
             .push((server.clone(), name.clone()));
         let _ = msg
@@ -559,12 +589,31 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mut m = load_members()?;
     let member = args.current().unwrap().to_owned();
-    let num = match m.remove_entry(&member) {
+    let channel = msg.channel_id.0;
+    let cm = match m.get_mut(&channel) {
         None => {
-            let _ = msg.channel_id.say(ctx, format!("Didn't find member")).await;
+            let _ = msg
+                .channel_id
+                .say(ctx, format!("No members registered in <#{channel}>"))
+                .await;
             return Ok(());
         }
-        Some((_, v)) => v.len(),
+        Some(cm) => cm,
+    };
+    let num = match cm.remove_entry(&member) {
+        None => {
+            let _ = msg
+                .channel_id
+                .say(ctx, format!("Didn't find member {member}"))
+                .await;
+            return Ok(());
+        }
+        Some((_, v)) => {
+            if cm.len() == 0 {
+                m.remove_entry(&channel);
+            }
+            v.len()
+        }
     };
     if let Err(err) = save_members(m) {
         let _ = msg
@@ -579,10 +628,8 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     }
     Ok(())
 }
-#[command]
-#[aliases(pt)]
-#[min_args(1)]
-async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+
+async fn get_riot_client(ctx: &Context) -> reqwest::Client {
     let riot_token = {
         let data_read = ctx.data.read().await;
         data_read
@@ -590,13 +637,20 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
             .expect("Expected RiotToken in TypeMap.")
             .clone()
     };
-    let typing = ctx.http.start_typing(msg.channel_id.0);
     let mut headers = HeaderMap::new();
     headers.insert("X-Riot-Token", HeaderValue::from_str(&riot_token).unwrap());
-    let client = ClientBuilder::new()
+    ClientBuilder::new()
         .default_headers(headers)
         .build()
-        .unwrap();
+        .unwrap()
+}
+
+#[command]
+#[aliases(pt)]
+#[min_args(1)]
+async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let client = get_riot_client(ctx).await;
+    let typing = ctx.http.start_typing(msg.channel_id.0);
     let mut s = String::new();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
         let (server, name) = match parse_server_summoner(&arg) {
@@ -628,23 +682,21 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 }
 
 async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
-    let riot_token = {
-        let data_read = ctx.data.read().await;
-        data_read
-            .get::<RiotToken>()
-            .expect("Expected RiotToken in TypeMap.")
-            .clone()
-    };
-    let typing = ctx.http.start_typing(channel.0);
-    let mut headers = HeaderMap::new();
-    headers.insert("X-Riot-Token", HeaderValue::from_str(&riot_token).unwrap());
-    let client = ClientBuilder::new()
-        .default_headers(headers)
-        .build()
-        .unwrap();
+    let client = get_riot_client(ctx).await;
     let mut s = String::new();
     let m = load_members()?;
-    for (member, accounts) in m.iter() {
+    let cid = channel.0;
+    let cm = match m.get(&cid) {
+        None => {
+            let _ = channel
+                .say(ctx, format!("No members registered in <#{cid}>"))
+                .await;
+            return Ok(());
+        }
+        Some(cm) => cm,
+    };
+    let typing = ctx.http.start_typing(cid);
+    for (member, accounts) in cm.iter() {
         s.push_str(&format!("**{member}**:\n"));
         for (server, name) in accounts {
             let puuid = match get_summoner(&client, &server, &name).await {
@@ -688,7 +740,9 @@ fn seconds_to_hms(mut secs: i64) -> (i64, i64, i64) {
 }
 
 fn is_sus(secs: &i64) -> String {
-    if secs > &(3600 * 5) {
+    if secs > &(3600 * 10) {
+        "<:AMOGUS:845281082764165131>"
+    } else if secs > &(3600 * 5) {
         "🤨"
     } else if secs > &(3600 * 2) {
         "😐"
@@ -833,4 +887,6 @@ async fn nightly_name_update(ctx: &Context, guilds: &Vec<GuildId>, day: &Weekday
     }
 }
 
-async fn weekly_lol_report(_ctx: &Context) {}
+async fn weekly_lol_report(_ctx: &Context) {
+    // not implemented
+}
