@@ -17,8 +17,7 @@ impl<T: ToString + FromStr + Eq + Hash + Clone> SetStore<T> {
         let contents = std::fs::read_to_string(&path)?;
         for line in contents.lines() {
             match line.parse::<T>() {
-                Ok(value) => 
-                set.insert(value.to_owned()),
+                Ok(value) => set.insert(value.to_owned()),
                 Err(_) => continue,
             };
         }

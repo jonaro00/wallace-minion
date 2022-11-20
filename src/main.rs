@@ -1,4 +1,5 @@
-mod set_store;
+use wallace_minion::riot_api::{Game, RiotAPIClient, ServerIdentifier, SummonerDTO};
+use wallace_minion::set_store::SetStore;
 
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -8,9 +9,6 @@ use std::sync::Arc;
 use chrono::Duration as cDuration;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{Client as HttpClient, ClientBuilder, Url};
-use serde::Deserialize;
 use serenity::async_trait;
 use serenity::client::{Client as DiscordClient, Context, EventHandler};
 use serenity::framework::standard::macros::{command, group, hook};
@@ -19,13 +17,12 @@ use serenity::framework::standard::{
 };
 use serenity::http::Http;
 use serenity::model::prelude::{
-    Activity, ChannelId, GatewayIntents, Guild, GuildId, Message, Ready, Timestamp, UserId,
+    Activity, ChannelId, GatewayIntents, Guild, GuildId, Message, Ready, ResumedEvent, Timestamp,
+    UserId,
 };
 use serenity::prelude::TypeMapKey;
 use time::{OffsetDateTime, Weekday};
-use tokio::time::{interval, sleep, Duration as tDuration};
-
-use set_store::SetStore;
+use tokio::time::{interval, Duration as tDuration};
 
 const GUILD_FILE: &str = "name_change_guilds.txt";
 
@@ -61,7 +58,7 @@ const GUILD_NAME_SUBJECTS: [&str; 36] = [
     "EggMan",
     "Trump",
     "Svergie",
-    "Kinas",
+    "Kina",
     "GustavVasa",
     "Trollface",
     "MackaPacka",
@@ -106,9 +103,9 @@ const GUILD_NAME_OBJECTS: [&str; 34] = [
     "Trädgårds",
 ];
 
-struct RiotToken;
-impl TypeMapKey for RiotToken {
-    type Value = Arc<String>;
+struct RiotClient;
+impl TypeMapKey for RiotClient {
+    type Value = Arc<RiotAPIClient>;
 }
 
 #[tokio::main]
@@ -117,8 +114,14 @@ async fn main() {
 
     let discord_token =
         env::var("DISCORD_TOKEN").expect("Discord token missing! (env variable `DISCORD_TOKEN`)");
-    let riot_token =
-        env::var("RIOT_TOKEN").expect("Riot token missing! (env variable `RIOT_TOKEN`)");
+    let riot_token_lol = env::var("RIOT_TOKEN_LOL")
+        .expect("Riot token for LoL missing! (env variable `RIOT_TOKEN_LOL`)");
+    let riot_token_tft = env::var("RIOT_TOKEN_TFT")
+        .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
+
+    let riot_api = RiotAPIClient::new(&riot_token_lol, &riot_token_tft)
+        .await
+        .expect("Failed to create HTTP client");
 
     let http = Http::new(&discord_token);
     let (owners, _bot_id) = match http.get_current_application_info().await {
@@ -158,7 +161,7 @@ async fn main() {
     {
         // Open the data lock in write mode, so keys can be inserted to it.
         let mut data = client.data.write().await;
-        data.insert::<RiotToken>(Arc::new(riot_token));
+        data.insert::<RiotClient>(Arc::new(riot_api));
     } // Release lock
 
     // start listening for events by starting a single shard
@@ -179,6 +182,10 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data: Ready) {
         println!("{} is connected!", data.user.name);
         let _ = ctx.set_activity(Activity::watching("you 🔨🙂")).await;
+    }
+
+    async fn resume(&self, _ctx: Context, _r: ResumedEvent) {
+        println!("Reconnected!");
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -350,7 +357,7 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         gid.edit_member(ctx, UserId(uid), |m| {
             m.disable_communication_until(
                 Timestamp::now()
-                    .checked_add_signed(chrono::Duration::seconds(TIMEOUT_LENGTH_SECONDS))
+                    .checked_add_signed(cDuration::seconds(TIMEOUT_LENGTH_SECONDS))
                     .expect("Failed to add date")
                     .to_rfc3339(),
             )
@@ -493,42 +500,6 @@ fn save_members(m: WeeklyReportMembers) -> Result<(), String> {
         })
 }
 
-#[derive(Debug, Deserialize)]
-struct SummonerDTO {
-    // accountId: String,
-    // profileIconId: i32,
-    // revisionDate: i64,
-    // name: String,
-    // id: String,
-    puuid: String,
-    // summonerLevel: i64,
-}
-#[derive(Debug, Deserialize)]
-struct MatchDTO {
-    info: InfoDTO,
-}
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct InfoDTO {
-    gameDuration: i64,
-}
-#[derive(Debug, Deserialize)]
-struct TFTMatchDTO {
-    info: TFTInfoDTO,
-}
-#[derive(Debug, Deserialize)]
-struct TFTInfoDTO {
-    // game_length: f32,
-    participants: Vec<TFTParticipantDTO>,
-}
-#[derive(Debug, Deserialize)]
-struct TFTParticipantDTO {
-    puuid: String,
-    time_eliminated: f32,
-}
-
-type MatchesList = Vec<String>;
-
 #[group]
 #[commands(lol)]
 struct LoL;
@@ -629,20 +600,12 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     Ok(())
 }
 
-async fn get_riot_client(ctx: &Context) -> reqwest::Client {
-    let riot_token = {
-        let data_read = ctx.data.read().await;
-        data_read
-            .get::<RiotToken>()
-            .expect("Expected RiotToken in TypeMap.")
-            .clone()
-    };
-    let mut headers = HeaderMap::new();
-    headers.insert("X-Riot-Token", HeaderValue::from_str(&riot_token).unwrap());
-    ClientBuilder::new()
-        .default_headers(headers)
-        .build()
-        .unwrap()
+async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClient> {
+    let data_read = ctx.data.read().await;
+    data_read
+        .get::<RiotClient>()
+        .expect("Expected Riot Client in TypeMap.")
+        .clone()
 }
 
 #[command]
@@ -654,25 +617,49 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     let mut s = String::new();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
         let (server, name) = match parse_server_summoner(&arg) {
-            Ok(pair) => pair,
+            Ok((ser, nam)) => match ServerIdentifier::parse(&ser) {
+                Ok(si) => (si, nam),
+                Err(err) => {
+                    s.push_str(&format!("{arg}: {err}\n"));
+                    continue;
+                }
+            },
             Err(err) => {
                 s.push_str(&format!("{arg}: {err}\n"));
                 continue;
             }
         };
-        let puuid = match get_summoner(&client, &server, &name).await {
+        let puuid_lol = match client.get_summoner(Game::LoL, &server, &name).await {
             Ok(SummonerDTO { puuid }) => puuid,
             Err(err) => {
                 s.push_str(&format!(
-                    "Couldn't find summmoner {name} on {server}: {err}\n"
+                    "Couldn't find summmoner {} on {}: {}\n",
+                    name,
+                    server.as_str(),
+                    err,
                 ));
                 continue;
             }
         };
-        let (amount, secs) = get_playtime(&client, &puuid).await?;
+        let puuid_tft = match client.get_summoner(Game::TFT, &server, &name).await {
+            Ok(SummonerDTO { puuid }) => puuid,
+            Err(err) => {
+                s.push_str(&format!(
+                    "Couldn't find summmoner {} on {}: {}\n",
+                    name,
+                    server.as_str(),
+                    err,
+                ));
+                continue;
+            }
+        };
+        let (amount, secs) = client.get_playtime(&puuid_lol, &puuid_tft).await?;
         let emoji = is_sus(&secs);
         let (hrs, mins, secs) = seconds_to_hms(secs);
-        s.push_str(&format!("[{server}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. {emoji}\n"));
+        s.push_str(&format!(
+            "[{}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. {emoji}\n",
+            server.as_str()
+        ));
     }
     if let Ok(typing) = typing {
         let _ = typing.stop();
@@ -699,19 +686,44 @@ async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
     for (member, accounts) in cm.iter() {
         s.push_str(&format!("**{member}**:\n"));
         for (server, name) in accounts {
-            let puuid = match get_summoner(&client, &server, &name).await {
+            let ser = match ServerIdentifier::parse(&server) {
+                Ok(si) => si,
+                Err(err) => {
+                    s.push_str(&format!("{server} {name}: {err}\n"));
+                    continue;
+                }
+            };
+            let puuid_lol = match client.get_summoner(Game::LoL, &ser, &name).await {
                 Ok(SummonerDTO { puuid }) => puuid,
                 Err(err) => {
                     s.push_str(&format!(
-                        "Couldn't find summmoner {name} on {server}: {err}\n"
+                        "Couldn't find summmoner {} on {}: {}\n",
+                        name,
+                        server.as_str(),
+                        err,
                     ));
                     continue;
                 }
             };
-            let (amount, secs) = get_playtime(&client, &puuid).await?;
+            let puuid_tft = match client.get_summoner(Game::TFT, &ser, &name).await {
+                Ok(SummonerDTO { puuid }) => puuid,
+                Err(err) => {
+                    s.push_str(&format!(
+                        "Couldn't find summmoner {} on {}: {}\n",
+                        name,
+                        server.as_str(),
+                        err,
+                    ));
+                    continue;
+                }
+            };
+            let (amount, secs) = client.get_playtime(&puuid_lol, &puuid_tft).await?;
             let emoji = is_sus(&secs);
             let (hrs, mins, secs) = seconds_to_hms(secs);
-            s.push_str(&format!("[{server}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. {emoji}\n"));
+            s.push_str(&format!(
+                "[{}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. {emoji}\n",
+                server.as_str()
+            ));
         }
     }
     if s.len() == 0 {
@@ -740,105 +752,18 @@ fn seconds_to_hms(mut secs: i64) -> (i64, i64, i64) {
 }
 
 fn is_sus(secs: &i64) -> String {
-    if secs > &(3600 * 10) {
+    if *secs > 3600 * 10 {
         "<:AMOGUS:845281082764165131>"
-    } else if secs > &(3600 * 5) {
+    } else if *secs > 3600 * 5 {
         "🤨"
-    } else if secs > &(3600 * 2) {
+    } else if *secs > 3600 * 2 {
         "😐"
-    } else if secs > &0 {
+    } else if *secs > 0 {
         "🙂"
     } else {
         ""
     }
     .to_owned()
-}
-
-const RIOT_RATE_LIMIT_MS: tDuration = tDuration::from_millis(1200);
-
-async fn get_summoner(
-    client: &HttpClient,
-    server: &str,
-    summoner_name: &str,
-) -> CommandResult<SummonerDTO> {
-    let serv_id = match server {
-        "EUW" => "euw1",
-        "EUNE" => "eun1",
-        _ => return Err(Box::new(serenity::Error::Other("Invalid server"))),
-    };
-    Ok(tokio::join!(
-        sleep(RIOT_RATE_LIMIT_MS),
-        client
-            .get(
-                Url::parse(&format!(
-            "https://{serv_id}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summoner_name}"
-        ))
-                .unwrap(),
-            )
-            .send()
-            .await?
-            .json::<SummonerDTO>()
-    )
-    .1?)
-}
-
-async fn get_playtime(client: &HttpClient, puuid: &str) -> CommandResult<(usize, i64)> {
-    let now = Timestamp::now();
-    let then = now.checked_sub_signed(cDuration::weeks(1)).unwrap();
-    let nowts = now.timestamp();
-    let thents = then.timestamp();
-    let mut secs = 0;
-    let lol_matches = tokio::join!(sleep(RIOT_RATE_LIMIT_MS), client.get(
-        format!(
-            "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?startTime={thents}&endTime={nowts}&start=0&count=100"
-        ))
-        .send()
-        .await?
-        .json::<MatchesList>()
-    ).1?;
-    for m_id in &lol_matches {
-        let mtch = tokio::join!(
-            sleep(RIOT_RATE_LIMIT_MS),
-            client
-                .get(format!(
-                    "https://europe.api.riotgames.com/lol/match/v5/matches/{m_id}"
-                ))
-                .send()
-                .await?
-                .json::<MatchDTO>()
-        )
-        .1?;
-        secs += mtch.info.gameDuration;
-    }
-    let tft_matches = tokio::join!(sleep(RIOT_RATE_LIMIT_MS), client
-        .get(format!(
-            "https://europe.api.riotgames.com/tft/match/v1/matches/by-puuid/{puuid}/ids?startTime={thents}&endTime={nowts}&start=0&count=100"
-        ))
-        .send()
-        .await?
-        .json::<MatchesList>()
-    ).1?;
-    for m_id in &tft_matches {
-        let mtch = tokio::join!(
-            sleep(RIOT_RATE_LIMIT_MS),
-            client
-                .get(format!(
-                    "https://europe.api.riotgames.com/tft/match/v1/matches/{m_id}"
-                ))
-                .send()
-                .await?
-                .json::<TFTMatchDTO>()
-        )
-        .1?;
-        secs += mtch
-            .info
-            .participants
-            .iter()
-            .find(|p| p.puuid == puuid)
-            .unwrap()
-            .time_eliminated as i64;
-    }
-    Ok((lol_matches.len() + tft_matches.len(), secs))
 }
 
 fn get_time() -> OffsetDateTime {
@@ -879,14 +804,17 @@ async fn nightly_name_update(ctx: &Context, guilds: &Vec<GuildId>, day: &Weekday
         if !members.containts(gid.0) {
             continue;
         };
-        let name = match day {
-            &Weekday::Tuesday => GUILD_DEFAULT_NAME.to_owned(),
+        let name = match *day {
+            Weekday::Tuesday => GUILD_DEFAULT_NAME.to_owned(),
             _ => random_name(),
         };
         let _ = set_server_name(ctx, gid.to_guild_cached(&ctx.cache).unwrap(), None, &name).await;
     }
 }
 
-async fn weekly_lol_report(_ctx: &Context) {
-    // not implemented
+async fn weekly_lol_report(ctx: &Context) {
+    let m = load_members().unwrap();
+    for cid in m.keys() {
+        let _ = lol_report(ctx, ChannelId(*cid));
+    }
 }
