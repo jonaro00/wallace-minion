@@ -1,14 +1,14 @@
-use wallace_minion::riot_api::{Game, RiotAPIClient, ServerIdentifier, SummonerDTO};
-use wallace_minion::set_store::SetStore;
-
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Duration as cDuration;
+use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use riven::consts::PlatformRoute;
 use serenity::async_trait;
 use serenity::client::{Client as DiscordClient, Context, EventHandler};
 use serenity::framework::standard::macros::{command, group, hook};
@@ -23,6 +23,9 @@ use serenity::model::prelude::{
 use serenity::prelude::TypeMapKey;
 use time::{OffsetDateTime, Weekday};
 use tokio::time::{interval, Duration as tDuration};
+
+use wallace_minion::riot_api::RiotAPIClient;
+use wallace_minion::set_store::SetStore;
 
 const GUILD_FILE: &str = "name_change_guilds.txt";
 
@@ -119,9 +122,7 @@ async fn main() {
     let riot_token_tft = env::var("RIOT_TOKEN_TFT")
         .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
 
-    let riot_api = RiotAPIClient::new(&riot_token_lol, &riot_token_tft)
-        .await
-        .expect("Failed to create HTTP client");
+    let riot_api = RiotAPIClient::new(&riot_token_lol, &riot_token_tft);
 
     let http = Http::new(&discord_token);
     let (owners, _bot_id) = match http.get_current_application_info().await {
@@ -608,58 +609,88 @@ async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClient> {
         .clone()
 }
 
+async fn push_playtime_str(
+    mut s: String,
+    client: &RiotAPIClient,
+    server: PlatformRoute,
+    name: &str,
+) -> String {
+    let region = server.to_regional();
+    let puuid_lol = match client
+        .get_summoner_lol(server, &name)
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|o| o.ok_or("Summoner not found".to_owned()))
+    {
+        Ok(a) => a,
+        Err(e) => {
+            s.push_str(&format!(
+                "Couldn't find summmoner {} on {}: {}\n",
+                name,
+                server.to_string(),
+                e
+            ));
+            return s;
+        }
+    }
+    .puuid;
+    let puuid_tft = match client
+        .get_summoner_tft(server, &name)
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|o| o.ok_or("Summoner not found".to_owned()))
+    {
+        Ok(a) => a,
+        Err(e) => {
+            s.push_str(&format!(
+                "Couldn't find summmoner {} on {}: {}\n",
+                name,
+                server.to_string(),
+                e
+            ));
+            return s;
+        }
+    }
+    .puuid;
+    let (amount, secs) = match client.get_playtime(region, &puuid_lol, &puuid_tft).await {
+        Ok(p) => p,
+        Err(e) => {
+            s.push_str(&format!(
+                "Failed to get playtime for {} on {}: {}\n",
+                name,
+                server.to_string(),
+                e
+            ));
+            return s;
+        }
+    };
+    let emoji = is_sus(&secs);
+    let (hrs, mins, secs) = seconds_to_hms(secs);
+    s.push_str(&format!(
+        "[{}] {name}: {amount} games, {hrs}h{mins}m{secs}s {emoji}\n",
+        server.to_string()
+    ));
+    s
+}
+
 #[command]
 #[aliases(pt)]
 #[min_args(1)]
 async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let typing = ctx.http.start_typing(msg.channel_id.0);
-    let mut s = String::new();
+    let mut s = String::from("**Weekly playtime:**\n");
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
-        let (server, name) = match parse_server_summoner(&arg) {
-            Ok((ser, nam)) => match ServerIdentifier::parse(&ser) {
-                Ok(si) => (si, nam),
-                Err(err) => {
-                    s.push_str(&format!("{arg}: {err}\n"));
-                    continue;
-                }
-            },
+        let (server, name) = match parse_server_summoner(&arg)
+            .and_then(|(ser, nam)| Ok((PlatformRoute::from_str(&ser)?, nam)))
+        {
+            Ok(o) => o,
             Err(err) => {
                 s.push_str(&format!("{arg}: {err}\n"));
                 continue;
             }
         };
-        let puuid_lol = match client.get_summoner(Game::LoL, &server, &name).await {
-            Ok(SummonerDTO { puuid }) => puuid,
-            Err(err) => {
-                s.push_str(&format!(
-                    "Couldn't find summmoner {} on {}: {}\n",
-                    name,
-                    server.as_str(),
-                    err,
-                ));
-                continue;
-            }
-        };
-        let puuid_tft = match client.get_summoner(Game::TFT, &server, &name).await {
-            Ok(SummonerDTO { puuid }) => puuid,
-            Err(err) => {
-                s.push_str(&format!(
-                    "Couldn't find summmoner {} on {}: {}\n",
-                    name,
-                    server.as_str(),
-                    err,
-                ));
-                continue;
-            }
-        };
-        let (amount, secs) = client.get_playtime(&puuid_lol, &puuid_tft).await?;
-        let emoji = is_sus(&secs);
-        let (hrs, mins, secs) = seconds_to_hms(secs);
-        s.push_str(&format!(
-            "[{}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. {emoji}\n",
-            server.as_str()
-        ));
+        s = push_playtime_str(s, &client, server, &name).await;
     }
     if let Ok(typing) = typing {
         let _ = typing.stop();
@@ -670,7 +701,7 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
     let client = get_riot_client(ctx).await;
-    let mut s = String::new();
+    let mut s = String::from("**Weekly playtime:**\n");
     let m = load_members()?;
     let cid = channel.0;
     let cm = match m.get(&cid) {
@@ -683,47 +714,17 @@ async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
         Some(cm) => cm,
     };
     let typing = ctx.http.start_typing(cid);
-    for (member, accounts) in cm.iter() {
+    for (member, accounts) in cm.iter().sorted() {
         s.push_str(&format!("**{member}**:\n"));
-        for (server, name) in accounts {
-            let ser = match ServerIdentifier::parse(&server) {
-                Ok(si) => si,
+        for (ser, name) in accounts {
+            let server = match PlatformRoute::from_str(&ser) {
+                Ok(o) => o,
                 Err(err) => {
-                    s.push_str(&format!("{server} {name}: {err}\n"));
+                    s.push_str(&format!("{ser}: {err}\n"));
                     continue;
                 }
             };
-            let puuid_lol = match client.get_summoner(Game::LoL, &ser, &name).await {
-                Ok(SummonerDTO { puuid }) => puuid,
-                Err(err) => {
-                    s.push_str(&format!(
-                        "Couldn't find summmoner {} on {}: {}\n",
-                        name,
-                        server.as_str(),
-                        err,
-                    ));
-                    continue;
-                }
-            };
-            let puuid_tft = match client.get_summoner(Game::TFT, &ser, &name).await {
-                Ok(SummonerDTO { puuid }) => puuid,
-                Err(err) => {
-                    s.push_str(&format!(
-                        "Couldn't find summmoner {} on {}: {}\n",
-                        name,
-                        server.as_str(),
-                        err,
-                    ));
-                    continue;
-                }
-            };
-            let (amount, secs) = client.get_playtime(&puuid_lol, &puuid_tft).await?;
-            let emoji = is_sus(&secs);
-            let (hrs, mins, secs) = seconds_to_hms(secs);
-            s.push_str(&format!(
-                "[{}] {name} played {amount} games in the past week. Total: {hrs}h{mins}m{secs}s. {emoji}\n",
-                server.as_str()
-            ));
+            s = push_playtime_str(s, &client, server, &name).await;
         }
     }
     if s.len() == 0 {
@@ -736,9 +737,11 @@ async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
     Ok(())
 }
 
-fn parse_server_summoner(s: &str) -> Result<(String, String), String> {
+fn parse_server_summoner(
+    s: &str,
+) -> Result<(String, String), Box<dyn std::error::Error + Sync + Send>> {
     match s.trim_matches('"').split_once(':') {
-        None => Err("Incorrect format".to_owned()),
+        None => Err("Incorrect format".to_owned())?,
         Some((server, name)) => Ok((server.to_owned(), name.to_owned())),
     }
 }
@@ -773,6 +776,7 @@ fn get_time() -> OffsetDateTime {
 async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
     let mut prev_time = get_time();
     let mut interval = interval(tDuration::from_secs(60));
+    let mut do_weekly: bool = false;
     loop {
         let time = get_time();
         let day = time.weekday();
@@ -781,11 +785,16 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
         if day != prev_time.weekday() {
             println!("It's a new day ({day}) :D");
             if day == Weekday::Monday {
-                weekly_lol_report(&ctx).await;
+                do_weekly = true;
             }
             nightly_name_update(&ctx, &guilds, &day).await;
         }
-        if hour != prev_time.hour() {}
+        if hour != prev_time.hour() {
+            if do_weekly && hour == 8 {
+                do_weekly = false;
+                weekly_lol_report(&ctx).await;
+            }
+        }
         if minute != prev_time.minute() {}
         prev_time = time;
         interval.tick().await;
@@ -815,6 +824,6 @@ async fn nightly_name_update(ctx: &Context, guilds: &Vec<GuildId>, day: &Weekday
 async fn weekly_lol_report(ctx: &Context) {
     let m = load_members().unwrap();
     for cid in m.keys() {
-        let _ = lol_report(ctx, ChannelId(*cid));
+        let _ = lol_report(ctx, ChannelId(*cid)).await;
     }
 }

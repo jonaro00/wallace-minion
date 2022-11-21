@@ -12,6 +12,7 @@ rand = "0.8"
 dotenv = "0.15"
 time = { version = "0.3", features = ["local-offset"] }
 chrono = { version = "0.4", default-features = false }
-reqwest = { version = "0.11", features = ["json", "gzip"] } # sudo apt-get install pkg-config libssl-dev # https://docs.rs/openssl/latest/openssl/index.html#automatic
 serde = "1.0"
 serde_json = "1.0"
+riven = "2" # reqwest: sudo apt-get install pkg-config libssl-dev # https://docs.rs/openssl/latest/openssl/index.html#automatic
+itertools = "0.10"

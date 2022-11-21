@@ -1,205 +1,112 @@
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{Client, ClientBuilder, Url};
-use serde::Deserialize;
+use riven::{
+    consts::{PlatformRoute, RegionalRoute},
+    models::{summoner_v4, tft_summoner_v1},
+    RiotApi, RiotApiError,
+};
 use time::{Duration, OffsetDateTime};
-use tokio::time::{sleep, Duration as tDuration};
-
-pub const RIOT_RATE_LIMIT_MS: tDuration = tDuration::from_millis(1200);
-
-pub enum Game {
-    LoL,
-    TFT,
-}
-
-pub enum ServerIdentifier {
-    EUNE,
-    EUW,
-}
-impl ServerIdentifier {
-    pub fn parse(s: &str) -> Result<ServerIdentifier, &str> {
-        match s {
-            "EUNE" => Ok(ServerIdentifier::EUNE),
-            "EUW" => Ok(ServerIdentifier::EUW),
-            _ => Err("Invalid server"),
-        }
-    }
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ServerIdentifier::EUNE => "eun1",
-            ServerIdentifier::EUW => "euw1",
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SummonerDTO {
-    // accountId: String,
-    // profileIconId: i32,
-    // revisionDate: i64,
-    // name: String,
-    // id: String,
-    pub puuid: String,
-    // summonerLevel: i64,
-}
-#[derive(Debug, Deserialize)]
-pub struct MatchDTO {
-    pub info: InfoDTO,
-}
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-pub struct InfoDTO {
-    pub gameDuration: i64,
-}
-#[derive(Debug, Deserialize)]
-pub struct TFTMatchDTO {
-    pub info: TFTInfoDTO,
-}
-#[derive(Debug, Deserialize)]
-pub struct TFTInfoDTO {
-    // game_length: f32,
-    pub participants: Vec<TFTParticipantDTO>,
-}
-#[derive(Debug, Deserialize)]
-pub struct TFTParticipantDTO {
-    pub puuid: String,
-    pub time_eliminated: f32,
-}
-
-pub type MatchesList = Vec<String>;
 
 pub struct RiotAPIClient {
-    client_lol: Client,
-    client_tft: Client,
+    client_lol: RiotApi,
+    client_tft: RiotApi,
 }
 
 impl RiotAPIClient {
-    pub async fn new(
-        riot_token_lol: &str,
-        riot_token_tft: &str,
-    ) -> Result<RiotAPIClient, reqwest::Error> {
-        let mut headers_lol = HeaderMap::new();
-        headers_lol.insert(
-            "X-Riot-Token",
-            HeaderValue::from_str(riot_token_lol).unwrap(),
-        );
-        let mut headers_tft = HeaderMap::new();
-        headers_tft.insert(
-            "X-Riot-Token",
-            HeaderValue::from_str(riot_token_tft).unwrap(),
-        );
-        Ok(RiotAPIClient {
-            client_lol: ClientBuilder::new()
-                .default_headers(headers_lol)
-                .connection_verbose(true)
-                .build()?,
-            client_tft: ClientBuilder::new()
-                .default_headers(headers_tft)
-                .connection_verbose(true)
-                .build()?,
-        })
+    pub fn new(riot_token_lol: &str, riot_token_tft: &str) -> Self {
+        Self {
+            client_lol: RiotApi::new(riot_token_lol),
+            client_tft: RiotApi::new(riot_token_tft),
+        }
     }
 
-    pub async fn get_summoner(
+    pub async fn get_summoner_lol(
         &self,
-        game: Game,
-        server: &ServerIdentifier,
+        server: PlatformRoute,
         summoner_name: &str,
-    ) -> Result<SummonerDTO, reqwest::Error> {
-        Ok(tokio::join!(
-            sleep(RIOT_RATE_LIMIT_MS),
-            match game {
-                Game::LoL => self.client_lol.get(
-                    Url::parse(&format!(
-                        "https://{}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{}",
-                        server.as_str(),
-                        summoner_name,
-                    ))
-                    .unwrap()
-                ),
-                Game::TFT => self.client_tft.get(
-                    Url::parse(&format!(
-                        "https://{}.api.riotgames.com/tft/summoner/v1/summoners/by-name/{}",
-                        server.as_str(),
-                        summoner_name,
-                    ))
-                    .unwrap()
-                ),
-            }
-            .send()
-            .await?
-            .json::<SummonerDTO>()
-        )
-        .1?)
+    ) -> Result<Option<summoner_v4::Summoner>, RiotApiError> {
+        self.client_lol
+            .summoner_v4()
+            .get_by_summoner_name(server, summoner_name)
+            .await
+    }
+    pub async fn get_summoner_tft(
+        &self,
+        server: PlatformRoute,
+        summoner_name: &str,
+    ) -> Result<Option<tft_summoner_v1::Summoner>, RiotApiError> {
+        self.client_tft
+            .tft_summoner_v1()
+            .get_by_summoner_name(server, summoner_name)
+            .await
     }
 
-    async fn playtime(&self, game: Game, puuid: &str) -> Result<(usize, i64), reqwest::Error> {
+    async fn weekly_playtime_lol(
+        &self,
+        region: RegionalRoute,
+        puuid: &str,
+    ) -> Result<(usize, i64), RiotApiError> {
         let now = OffsetDateTime::now_utc().unix_timestamp();
         let then = now.checked_sub(Duration::WEEK.whole_seconds()).unwrap();
         let mut secs = 0;
-        let matches = tokio::join!(
-            sleep(RIOT_RATE_LIMIT_MS),
-            match game {
-                Game::LoL => self.client_lol.get(format!(
-                    "https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/{}/ids?startTime={}&endTime={}&start=0&count=100",
-                    puuid, then, now
-                )),
-                Game::TFT => self.client_tft.get(format!(
-                    "https://europe.api.riotgames.com/tft/match/v1/matches/by-puuid/{}/ids?startTime={}&endTime={}&start=0&count=100",
-                    puuid, then, now
-                ))
-            }
-            .send()
-            .await?
-            .json::<MatchesList>()
-        ).1?;
+        let matches = self
+            .client_lol
+            .match_v5()
+            .get_match_ids_by_puuid(region, puuid, Some(100), None, None, Some(then), None, None)
+            .await?;
         for m_id in &matches {
-            match game {
-                Game::LoL => {
-                    let mtch = tokio::join!(
-                        sleep(RIOT_RATE_LIMIT_MS),
-                        self.client_lol
-                            .get(format!(
-                                "https://europe.api.riotgames.com/lol/match/v5/matches/{m_id}"
-                            ))
-                            .send()
-                            .await?
-                            .json::<MatchDTO>()
-                    )
-                    .1?;
-                    secs += mtch.info.gameDuration;
-                }
-                Game::TFT => {
-                    let mtch = tokio::join!(
-                        sleep(RIOT_RATE_LIMIT_MS),
-                        self.client_tft
-                            .get(format!(
-                                "https://europe.api.riotgames.com/tft/match/v1/matches/{m_id}"
-                            ))
-                            .send()
-                            .await?
-                            .json::<TFTMatchDTO>()
-                    )
-                    .1?;
-                    secs += mtch
-                        .info
-                        .participants
-                        .iter()
-                        .find(|p| p.puuid == puuid)
-                        .unwrap()
-                        .time_eliminated as i64;
-                }
-            };
+            let mtch = self
+                .client_lol
+                .match_v5()
+                .get_match(region, m_id)
+                .await?
+                .expect("Match not found");
+            secs += mtch.info.game_duration;
+        }
+        Ok((matches.len(), secs))
+    }
+    async fn weekly_playtime_tft(
+        &self,
+        region: RegionalRoute,
+        puuid: &str,
+    ) -> Result<(usize, i64), RiotApiError> {
+        let now = OffsetDateTime::now_utc().unix_timestamp();
+        let then = now.checked_sub(Duration::WEEK.whole_seconds()).unwrap();
+        let mut secs = 0;
+        let matches = self
+            .client_tft
+            .tft_match_v1()
+            .get_match_ids_by_puuid(region, puuid, Some(100), None, None, Some(then))
+            .await?;
+        for m_id in &matches {
+            let mtch = self
+                .client_tft
+                .tft_match_v1()
+                .get_match(region, m_id)
+                .await?
+                .expect("Match not found");
+            secs += mtch
+                .info
+                .participants
+                .iter()
+                .find(|p| p.puuid == puuid)
+                .expect("Summoner not found")
+                .time_eliminated as i64;
         }
         Ok((matches.len(), secs))
     }
 
     pub async fn get_playtime(
         &self,
+        region: RegionalRoute,
         puuid_lol: &str,
         puuid_tft: &str,
-    ) -> Result<(usize, i64), reqwest::Error> {
-        let (ml, sl) = self.playtime(Game::LoL, puuid_lol).await?;
-        let (mt, st) = self.playtime(Game::TFT, puuid_tft).await?;
-        Ok((ml + mt, sl + st))
+    ) -> Result<(usize, i64), RiotApiError> {
+        match tokio::join!(
+            self.weekly_playtime_lol(region, puuid_lol),
+            self.weekly_playtime_tft(region, puuid_tft),
+        ) {
+            (Ok((ml, sl)), Ok((mt, st))) => Ok((ml + mt, sl + st)),
+            (Err(e), _) => Err(e),
+            (Ok(_), Err(e)) => Err(e),
+        }
     }
 }
