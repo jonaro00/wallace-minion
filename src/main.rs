@@ -148,7 +148,8 @@ async fn main() {
         .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
         .group(&COOLTEXT_GROUP)
-        .group(&LOL_GROUP);
+        .group(&LOL_GROUP)
+        .group(&TFT_GROUP);
     let mut client = DiscordClient::builder(
         discord_token,
         GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
@@ -260,7 +261,7 @@ struct General;
 
 #[command]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    if msg.author.id.to_string() == "224233166024474635" {
+    if msg.author.id.0 == 224233166024474635 {
         let _ = msg.react(ctx, '👑').await;
     }
     let _ = tokio::join!(msg.react(ctx, '👍'), msg.channel_id.say(ctx, "Pong!"),);
@@ -734,6 +735,40 @@ async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
         let _ = typing.stop();
     }
     channel.say(ctx, s).await?;
+    Ok(())
+}
+
+#[group]
+#[commands(tft)]
+struct TFT;
+
+#[command]
+#[sub_commands(analysis)]
+async fn tft(_ctx: &Context, _msg: &Message, mut _args: Args) -> CommandResult {
+    Err(Box::new(serenity::Error::Other("Not implemented")))
+}
+
+#[command]
+#[min_args(1)]
+async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let client = get_riot_client(ctx).await;
+    let arg = args.current().unwrap().to_owned();
+    let (server, name) = parse_server_summoner(&arg)
+        .and_then(|(ser, nam)| Ok((PlatformRoute::from_str(&ser)?, nam)))?;
+    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let puuid_tft = &client
+        .get_summoner_tft(server, &name)
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|o| o.ok_or("Summoner not found".to_owned()))?
+        .puuid;
+    let ss = client.tft_analysis(server.to_regional(), puuid_tft).await?;
+    if let Ok(typing) = typing {
+        let _ = typing.stop();
+    }
+    for s in ss {
+        msg.channel_id.say(ctx, s).await?;
+    }
     Ok(())
 }
 
