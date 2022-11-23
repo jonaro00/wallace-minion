@@ -8,7 +8,10 @@ use chrono::Duration as cDuration;
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::ClientBuilder;
 use riven::consts::PlatformRoute;
+use serde::Deserialize;
 use serenity::async_trait;
 use serenity::client::{Client as DiscordClient, Context, EventHandler};
 use serenity::framework::standard::macros::{command, group, hook};
@@ -147,7 +150,8 @@ async fn main() {
         .group(&GENERAL_GROUP)
         .group(&COOLTEXT_GROUP)
         .group(&LOL_GROUP)
-        .group(&TFT_GROUP);
+        .group(&TFT_GROUP)
+        .group(&EMOTE_GROUP);
     let mut client = DiscordClient::builder(
         discord_token,
         GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
@@ -477,6 +481,64 @@ fn to_cool_text(text: &str, font: CoolTextFont) -> String {
         }
     }
     s
+}
+
+#[group]
+#[commands(emote)]
+struct Emote;
+
+#[derive(Deserialize)]
+struct StvResponse {
+    data: StvData
+}
+#[derive(Deserialize)]
+struct StvData {
+    emotes: StvEmotes
+}
+#[derive(Deserialize)]
+struct StvEmotes {
+    items: Vec<StvItem>
+}
+#[derive(Deserialize)]
+struct StvItem {
+    id: String,
+    animated: bool,
+    // name: String,
+}
+
+#[command]
+#[aliases(e)]
+#[min_args(1)]
+async fn emote(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let q = args.current().unwrap();
+    let mut h = HeaderMap::new();
+    h.append(
+        "content-type",
+        HeaderValue::from_str("application/json").unwrap(),
+    );
+    let c = ClientBuilder::new().default_headers(h).build().unwrap();
+    let b = format!(
+        r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1}},"query":"query SearchEmotes($query: String!, $limit: Int) {{ emotes(query: $query, limit: $limit) {{ items {{ id animated name }} }} }} " }}"#
+    );
+    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let r = c.post("https://7tv.io/v3/gql").body(b).send().await?;
+    let t = r.json::<StvResponse>().await?;
+    let e = t.data.emotes.items.first().unwrap();
+    let id = &e.id;
+    let anim = &e.animated;
+    if let Ok(typing) = typing {
+        let _ = typing.stop();
+    }
+    msg.channel_id
+        .say(
+            ctx,
+            format!(
+                "https://cdn.7tv.app/emote/{id}/4x.{}",
+                if !anim { "png" } else { "gif" }
+            ),
+        )
+        .await?;
+    Ok(())
 }
 
 const WEEKLY_REPORT_MEMBERS_FILE: &str = "weekly_report_members.json";

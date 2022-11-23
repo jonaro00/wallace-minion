@@ -1650,12 +1650,13 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "wallace-minion"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "chrono",
  "dotenv",
  "itertools",
  "rand",
+ "reqwest",
  "riven",
  "serde",
  "serde_json",

@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -14,5 +14,6 @@ time = { version = "0.3", features = ["local-offset"] }
 chrono = { version = "0.4", default-features = false }
 serde = "1.0"
 serde_json = "1.0"
-riven = { version = "2", git = "https://github.com/jonaro00/Riven" } # reqwest: sudo apt-get install pkg-config # https://docs.rs/openssl/latest/openssl/index.html#automatic
+reqwest = "0.11" # reqwest: sudo apt-get install pkg-config # https://docs.rs/openssl/latest/openssl/index.html#automatic
+riven = { version = "2", git = "https://github.com/jonaro00/Riven" }
 itertools = "0.10"
