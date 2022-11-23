@@ -526,13 +526,10 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let mut m = load_members()?;
     let channel = msg.channel_id.0;
     let member = args.current().unwrap().to_owned();
-    if !m.contains_key(&channel) {
-        m.insert(channel.clone(), GuildWeeklyReportMembers::new());
-    }
+    m.entry(channel)
+        .or_insert_with(GuildWeeklyReportMembers::new);
     let cm = m.get_mut(&channel).unwrap();
-    if !cm.contains_key(&member) {
-        cm.insert(member.clone(), AccountList::new());
-    }
+    cm.entry(member.clone()).or_insert_with(AccountList::new);
     args.advance();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
         let (server, name) = match parse_server_summoner(&arg) {
@@ -586,7 +583,7 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             return Ok(());
         }
         Some((_, v)) => {
-            if cm.len() == 0 {
+            if cm.is_empty() {
                 m.remove_entry(&channel);
             }
             v.len()
@@ -622,36 +619,32 @@ async fn push_playtime_str(
 ) -> String {
     let region = server.to_regional();
     let puuid_lol = match client
-        .get_summoner_lol(server, &name)
+        .get_summoner_lol(server, name)
         .await
         .map_err(|e| e.to_string())
-        .and_then(|o| o.ok_or("Summoner not found".to_owned()))
+        .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))
     {
         Ok(a) => a,
         Err(e) => {
             s.push_str(&format!(
                 "Couldn't find summmoner {} on {}: {}\n",
-                name,
-                server.to_string(),
-                e
+                name, server, e
             ));
             return s;
         }
     }
     .puuid;
     let puuid_tft = match client
-        .get_summoner_tft(server, &name)
+        .get_summoner_tft(server, name)
         .await
         .map_err(|e| e.to_string())
-        .and_then(|o| o.ok_or("Summoner not found".to_owned()))
+        .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))
     {
         Ok(a) => a,
         Err(e) => {
             s.push_str(&format!(
                 "Couldn't find summmoner {} on {}: {}\n",
-                name,
-                server.to_string(),
-                e
+                name, server, e
             ));
             return s;
         }
@@ -662,9 +655,7 @@ async fn push_playtime_str(
         Err(e) => {
             s.push_str(&format!(
                 "Failed to get playtime for {} on {}: {}\n",
-                name,
-                server.to_string(),
-                e
+                name, server, e
             ));
             return s;
         }
@@ -673,7 +664,7 @@ async fn push_playtime_str(
     let (hrs, mins, secs) = seconds_to_hms(secs);
     s.push_str(&format!(
         "[{}] {name}: {amount} games, {hrs}h{mins}m{secs}s {emoji}\n",
-        server.to_string()
+        server
     ));
     s
 }
@@ -722,17 +713,17 @@ async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
     for (member, accounts) in cm.iter().sorted() {
         s.push_str(&format!("**{member}**:\n"));
         for (ser, name) in accounts {
-            let server = match PlatformRoute::from_str(&ser) {
+            let server = match PlatformRoute::from_str(ser) {
                 Ok(o) => o,
                 Err(err) => {
                     s.push_str(&format!("{ser}: {err}\n"));
                     continue;
                 }
             };
-            s = push_playtime_str(s, &client, server, &name).await;
+            s = push_playtime_str(s, &client, server, name).await;
         }
     }
-    if s.len() == 0 {
+    if s.is_empty() {
         s.push_str("No members 😥");
     }
     if let Ok(typing) = typing {
@@ -764,7 +755,7 @@ async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .get_summoner_tft(server, &name)
         .await
         .map_err(|e| e.to_string())
-        .and_then(|o| o.ok_or("Summoner not found".to_owned()))?
+        .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))?
         .puuid;
     let ss = client.tft_analysis(server.to_regional(), puuid_tft).await?;
     if let Ok(typing) = typing {
