@@ -183,7 +183,7 @@ impl EventHandler for Handler {
 
     async fn ready(&self, ctx: Context, data: Ready) {
         println!("{} is connected!", data.user.name);
-        let _ = ctx.set_activity(Activity::watching("you 🔨🙂")).await;
+        let _ = ctx.set_activity(Activity::watching(format!("you 🔨🙂 (v{})", env!("CARGO_PKG_VERSION")))).await;
     }
 
     async fn resume(&self, _ctx: Context, _r: ResumedEvent) {
