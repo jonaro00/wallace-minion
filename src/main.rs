@@ -122,8 +122,6 @@ async fn main() {
     let riot_token_tft = env::var("RIOT_TOKEN_TFT")
         .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
 
-    let riot_api = RiotAPIClient::new(&riot_token_lol, &riot_token_tft);
-
     let http = Http::new(&discord_token);
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
@@ -160,6 +158,7 @@ async fn main() {
     .expect("Error creating client");
 
     // Insert shared data
+    let riot_api = RiotAPIClient::new(&riot_token_lol, &riot_token_tft);
     {
         // Open the data lock in write mode, so keys can be inserted to it.
         let mut data = client.data.write().await;
@@ -183,7 +182,12 @@ impl EventHandler for Handler {
 
     async fn ready(&self, ctx: Context, data: Ready) {
         println!("{} is connected!", data.user.name);
-        let _ = ctx.set_activity(Activity::watching(format!("you 🔨🙂 (v{})", env!("CARGO_PKG_VERSION")))).await;
+        let status = if cfg!(debug_assertions) {
+            "construction work 🔨🙂".to_owned()
+        } else {
+            format!("you 🔨🙂 (v{})", env!("CARGO_PKG_VERSION"))
+        };
+        let _ = ctx.set_activity(Activity::watching(status)).await;
     }
 
     async fn resume(&self, _ctx: Context, _r: ResumedEvent) {

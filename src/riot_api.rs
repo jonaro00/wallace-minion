@@ -154,14 +154,10 @@ impl RiotAPIClient {
                 .expect("Summoner not found");
             let placement = if mtch.info.tft_game_type == "pairs" {
                 match player.placement {
-                    1 => 1.0,
-                    2 => 1.0,
-                    3 => 1.0 + 7.0 / 3.0,
-                    4 => 1.0 + 7.0 / 3.0,
-                    5 => 1.0 + 14.0 / 3.0,
-                    6 => 1.0 + 14.0 / 3.0,
-                    7 => 8.0,
-                    8 => 8.0,
+                    1..=2 => 1.0,
+                    3..=4 => 1.0 + 7.0 / 3.0,
+                    5..=6 => 1.0 + 14.0 / 3.0,
+                    7..=8 => 8.0,
                     _ => 1000.0,
                 }
             } else {
