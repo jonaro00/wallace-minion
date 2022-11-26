@@ -489,17 +489,27 @@ struct Emote;
 
 #[derive(Deserialize)]
 struct StvResponse {
-    data: StvData
+    data: StvData,
 }
 #[derive(Deserialize)]
-struct StvData {
-    emotes: StvEmotes
+#[serde(untagged)]
+enum StvData {
+    StvEmoteData(StvEmoteData),
+    StvEmotesData(StvEmotesData),
+}
+#[derive(Deserialize)]
+struct StvEmotesData {
+    emotes: StvEmotes,
+}
+#[derive(Deserialize)]
+struct StvEmoteData {
+    emote: StvItem,
 }
 #[derive(Deserialize)]
 struct StvEmotes {
-    items: Vec<StvItem>
+    items: Vec<StvItem>,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct StvItem {
     id: String,
     animated: bool,
@@ -517,13 +527,23 @@ async fn emote(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         HeaderValue::from_str("application/json").unwrap(),
     );
     let c = ClientBuilder::new().default_headers(h).build().unwrap();
-    let b = format!(
-        r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1}},"query":"query SearchEmotes($query: String!, $limit: Int) {{ emotes(query: $query, limit: $limit) {{ items {{ id animated name }} }} }} " }}"#
-    );
     let typing = ctx.http.start_typing(msg.channel_id.0);
+    let explicit_id = q.len() == 24 && q.chars().all(|c| c.is_ascii_hexdigit());
+    let b = if explicit_id {
+        format!(
+            r#"{{"operationName":"Emote","variables":{{"id":"{q}"}},"query":"query Emote($id: ObjectID!) {{ emote(id: $id) {{ id animated name }} }} " }}"#
+        )
+    } else {
+        format!(
+            r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1}},"query":"query SearchEmotes($query: String!, $limit: Int) {{ emotes(query: $query, limit: $limit) {{ items {{ id animated name }} }} }} " }}"#
+        )
+    };
     let r = c.post("https://7tv.io/v3/gql").body(b).send().await?;
     let t = r.json::<StvResponse>().await?;
-    let e = t.data.emotes.items.first().unwrap();
+    let e = match t.data {
+        StvData::StvEmoteData(e) => e.emote,
+        StvData::StvEmotesData(e) => e.emotes.items.first().unwrap().to_owned(),
+    };
     let id = &e.id;
     let anim = &e.animated;
     if let Ok(typing) = typing {
