@@ -528,14 +528,35 @@ async fn emote(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     );
     let c = ClientBuilder::new().default_headers(h).build().unwrap();
     let typing = ctx.http.start_typing(msg.channel_id.0);
-    let explicit_id = q.len() == 24 && q.chars().all(|c| c.is_ascii_hexdigit());
+    let (explicit_id, q) = {
+        let q = if q.len() >= 24 {
+            q.chars()
+                .rev()
+                .collect::<Vec<char>>()
+                .iter()
+                .take(24)
+                .rev()
+                .collect::<String>()
+        } else {
+            q.to_owned()
+        };
+        (q.chars().all(|c| c.is_ascii_hexdigit()), q)
+    };
     let b = if explicit_id {
         format!(
             r#"{{"operationName":"Emote","variables":{{"id":"{q}"}},"query":"query Emote($id: ObjectID!) {{ emote(id: $id) {{ id animated name }} }} " }}"#
         )
     } else {
+        let (e, q) = if q.chars().count() >= 3
+            && ((q.starts_with('"') && q.ends_with('"'))
+                || (q.starts_with('\'') && q.ends_with('\'')))
+        {
+            ("true", q.trim_matches(|c| c == '"' || c == '\'').to_owned())
+        } else {
+            ("false", q)
+        };
         format!(
-            r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1}},"query":"query SearchEmotes($query: String!, $limit: Int) {{ emotes(query: $query, limit: $limit) {{ items {{ id animated name }} }} }} " }}"#
+            r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1,"filter":{{"exact_match":{e},"case_sensitive":{e},"ignore_tags":true}}}},"query":"query SearchEmotes($query: String!, $limit: Int, $filter: EmoteSearchFilter) {{ emotes(query: $query, limit: $limit, filter: $filter) {{ items {{ id animated name }} }} }} " }}"#
         )
     };
     let r = c.post("https://7tv.io/v3/gql").body(b).send().await?;
@@ -885,6 +906,7 @@ fn get_time() -> OffsetDateTime {
     OffsetDateTime::now_utc()
 }
 
+#[allow(clippy::collapsible_if)]
 async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
     let mut prev_time = get_time();
     let mut interval = interval(tDuration::from_secs(60));
