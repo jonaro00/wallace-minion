@@ -910,7 +910,6 @@ fn get_time() -> OffsetDateTime {
 async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
     let mut prev_time = get_time();
     let mut interval = interval(tDuration::from_secs(60));
-    let mut do_weekly: bool = false;
     loop {
         let time = get_time();
         let day = time.weekday();
@@ -918,14 +917,10 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
         let minute = time.minute();
         if day != prev_time.weekday() {
             println!("It's a new day ({day}) :D");
-            if day == Weekday::Monday {
-                do_weekly = true;
-            }
             nightly_name_update(&ctx, &guilds, &day).await;
         }
         if hour != prev_time.hour() {
-            if do_weekly && hour == 8 {
-                do_weekly = false;
+            if day == Weekday::Monday && hour == 8 {
                 weekly_lol_report(&ctx).await;
             }
         }
