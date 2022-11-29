@@ -24,7 +24,7 @@ use serenity::model::prelude::{
     UserId,
 };
 use serenity::prelude::TypeMapKey;
-use time::{OffsetDateTime, Weekday};
+use time::{Month, OffsetDateTime, Weekday};
 use tokio::time::{interval, Duration as tDuration};
 
 use wallace_minion::riot_api::RiotAPIClient;
@@ -33,6 +33,20 @@ use wallace_minion::set_store::SetStore;
 const GUILD_FILE: &str = "name_change_guilds.txt";
 
 const GUILD_DEFAULT_NAME: &str = "Tisdags Gaming Klubb";
+
+const _KORV_INGVAR_ANNIVERSARY_NAME: &str = "KorvIngvars Följeskaps Klubb";
+const KORV_INGVAR_ANNIVERSARIES: &[(Month, u8, &str); 2] = &[
+    (
+        Month::September,
+        13,
+        "Idag minns vi dagen då KorvIngvar föddes <:IngvarDrip:931696495412011068>🥳🎉",
+    ),
+    (
+        Month::September,
+        23,
+        "Idag minns vi dagen då KorvIngvar dog <:IngvarDrip:931696495412011068>✝😞",
+    ),
+];
 
 const GUILD_NAME_SUBJECTS: [&str; 36] = [
     "Tisdag",
@@ -912,6 +926,7 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
     let mut interval = interval(tDuration::from_secs(60));
     loop {
         let time = get_time();
+        let (_year, month, dom) = time.to_calendar_date();
         let day = time.weekday();
         let hour = time.hour();
         let minute = time.minute();
@@ -922,6 +937,11 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
         if hour != prev_time.hour() {
             if day == Weekday::Monday && hour == 8 {
                 weekly_lol_report(&ctx).await;
+            }
+            for (m, d, _mes) in KORV_INGVAR_ANNIVERSARIES {
+                if month == *m && dom == *d && hour == 8 {
+                    () // TODO
+                }
             }
         }
         if minute != prev_time.minute() {}
