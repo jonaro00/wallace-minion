@@ -31,20 +31,20 @@ const GUILD_FILE: &str = "name_change_guilds.txt";
 const GUILD_DEFAULT_NAME: &str = "Tisdags Gaming Klubb";
 
 const _KORV_INGVAR_ANNIVERSARY_NAME: &str = "KorvIngvars Följeskaps Klubb";
-const KORV_INGVAR_ANNIVERSARIES: &[(Month, u8, &str); 2] = &[
-    (
+const KORV_INGVAR_ANNIVERSARIES: &[&(Month, u8, &str)] = &[
+    &(
         Month::September,
         13,
         "Idag minns vi dagen då KorvIngvar föddes <:IngvarDrip:931696495412011068>🥳🎉",
     ),
-    (
+    &(
         Month::September,
         23,
         "Idag minns vi dagen då KorvIngvar dog <:IngvarDrip:931696495412011068>✝😞",
     ),
 ];
 
-const GUILD_NAME_SUBJECTS: [&str; 36] = [
+const GUILD_NAME_SUBJECTS: &[&str] = &[
     "Tisdag",
     "Johan",
     "Matteus",
@@ -63,6 +63,7 @@ const GUILD_NAME_SUBJECTS: [&str; 36] = [
     "Pettson",
     "FågelTurken",
     "Pingu",
+    "Höjdarna",
     "Muminpappa",
     "LillaMy",
     "Lipton",
@@ -73,26 +74,51 @@ const GUILD_NAME_SUBJECTS: [&str; 36] = [
     "Knugen",
     "EggMan",
     "Trump",
+    "Obama",
+    "Steffe",
     "Svergie",
+    "MupDef",
     "Kina",
+    "NordKorea",
     "GustavVasa",
     "Trollface",
+    "Pepe",
     "MackaPacka",
+    "PostisPer",
+    "StoraMaskiner",
     "Svampbob",
     "Perry",
     "DrDoofenshmirtz",
+    "PostNord",
+    "ICA",
+    "MrBeast",
+    "TheBausffs",
+    "Gragas",
+    "Rammus",
+    "Notch",
+    "EdwardBlom",
+    "LeifGWPersson",
+    "ElonMusk",
+    "JohnCena",
+    "MrBean",
 ];
-const GUILD_NAME_OBJECTS: [&str; 34] = [
+const GUILD_NAME_OBJECTS: &[&str] = &[
     "Gaming",
     "Minecraft",
     "Fortnite",
     "LoL",
+    "TFT",
     "Gartic",
     "AmongUs",
     "Terraria",
+    "MarioKart",
+    "SmashBros",
+    "Roblox",
     "Pokémon",
     "Magic",
+    "LEGO",
     "Schack",
+    "Agario",
     "Ost",
     "Korv",
     "Blodpudding",
@@ -103,10 +129,17 @@ const GUILD_NAME_OBJECTS: [&str; 34] = [
     "BingChilling",
     "Nyponsoppa",
     "Grönsaks",
+    "LivsGlädje",
     "👺",
     "Anime",
     "Kpop",
+    "Musik",
+    "Bok",
+    "Golf",
+    "Fotbolls",
     "Matematik",
+    "Programmerings",
+    "Politik",
     "Plugg",
     "Kubb",
     "Nörd",
@@ -117,6 +150,10 @@ const GUILD_NAME_OBJECTS: [&str; 34] = [
     "Ondskefulla",
     "Hemliga",
     "Trädgårds",
+    "Pepega",
+    "Shilling",
+    "BOMBA",
+    "Boomer",
 ];
 
 struct RiotClient;
