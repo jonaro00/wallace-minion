@@ -1,22 +1,19 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::{BTreeMap, HashSet};
 
-use itertools::Itertools;
+pub use riven::consts::PlatformRoute;
 use riven::{
-    consts::{PlatformRoute, RegionalRoute},
+    consts::RegionalRoute,
     models::{summoner_v4, tft_summoner_v1},
     RiotApi, RiotApiError,
 };
 use time::{Duration, OffsetDateTime};
 
-pub struct RiotAPIClient {
+pub struct RiotAPIClients {
     client_lol: RiotApi,
     client_tft: RiotApi,
 }
 
-impl RiotAPIClient {
+impl RiotAPIClients {
     pub fn new(riot_token_lol: &str, riot_token_tft: &str) -> Self {
         Self {
             client_lol: RiotApi::new(riot_token_lol),
@@ -216,15 +213,21 @@ impl RiotAPIClient {
             s.push_str("```\n");
             let mut line = false;
             for (t, (p, g)) in ranking
-                .sorted_iter()
+                .sorted_vec()
+                .iter()
                 .filter(|(_t, (_p, g))| g > &low_dataset_bound)
             {
-                let avg = p / g as f32;
+                let avg = p / *g as f32;
                 if !line && avg >= 4.5 {
                     s.push_str("---\n");
                     line = true;
                 }
-                s.push_str(&format!("{: <15} {:.1} ({})\n", last_part(t), avg, g));
+                s.push_str(&format!(
+                    "{: <15} {:.1} ({})\n",
+                    last_part(t.to_string()),
+                    avg,
+                    g
+                ));
             }
             s.push_str("```");
             res.push(s);
@@ -239,16 +242,16 @@ fn last_part(s: String) -> String {
 
 #[derive(Debug)]
 struct WinrateList<T> {
-    pub map: HashMap<T, (f32, usize)>,
+    pub map: BTreeMap<T, (f32, usize)>,
 }
 
 impl<T> WinrateList<T>
 where
-    T: Eq + Hash,
+    T: Ord + Clone,
 {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            map: BTreeMap::new(),
         }
     }
     pub fn insert(&mut self, entry: T, placement: &f32) {
@@ -258,10 +261,10 @@ where
         };
         self.map.insert(entry, v);
     }
-    pub fn sorted_iter(self) -> std::vec::IntoIter<(T, (f32, usize))> {
-        self.map
-            .into_iter()
-            .sorted_by_key(|(_t, (p, g))| ((p / *g as f32) * 1000.0) as i32)
+    pub fn sorted_vec(self) -> Vec<(T, (f32, usize))> {
+        let mut v: Vec<(T, (f32, usize))> = self.map.clone().into_iter().collect();
+        v.sort_by_key(|(_t, (p, g))| ((p / *g as f32) * 1000.0) as i32);
+        return v;
     }
 }
 

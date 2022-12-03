@@ -1,17 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Duration as cDuration;
-use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::ClientBuilder;
-use riven::consts::PlatformRoute;
-use serde::Deserialize;
 use serenity::async_trait;
 use serenity::client::{Client as DiscordClient, Context, EventHandler};
 use serenity::framework::standard::macros::{command, group, hook};
@@ -27,8 +22,9 @@ use serenity::prelude::TypeMapKey;
 use time::{Month, OffsetDateTime, Weekday};
 use tokio::time::{interval, Duration as tDuration};
 
-use wallace_minion::riot_api::RiotAPIClient;
+use wallace_minion::riot_api::{PlatformRoute, RiotAPIClients};
 use wallace_minion::set_store::SetStore;
+use wallace_minion::seven_tv;
 
 const GUILD_FILE: &str = "name_change_guilds.txt";
 
@@ -125,7 +121,7 @@ const GUILD_NAME_OBJECTS: [&str; 34] = [
 
 struct RiotClient;
 impl TypeMapKey for RiotClient {
-    type Value = Arc<RiotAPIClient>;
+    type Value = Arc<RiotAPIClients>;
 }
 
 #[tokio::main]
@@ -176,7 +172,7 @@ async fn main() {
     .expect("Error creating client");
 
     // Insert shared data
-    let riot_api = RiotAPIClient::new(&riot_token_lol, &riot_token_tft);
+    let riot_api = RiotAPIClients::new(&riot_token_lol, &riot_token_tft);
     {
         // Open the data lock in write mode, so keys can be inserted to it.
         let mut data = client.data.write().await;
@@ -501,106 +497,25 @@ fn to_cool_text(text: &str, font: CoolTextFont) -> String {
 #[commands(emote)]
 struct Emote;
 
-#[derive(Deserialize)]
-struct StvResponse {
-    data: StvData,
-}
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum StvData {
-    StvEmoteData(StvEmoteData),
-    StvEmotesData(StvEmotesData),
-}
-#[derive(Deserialize)]
-struct StvEmotesData {
-    emotes: StvEmotes,
-}
-#[derive(Deserialize)]
-struct StvEmoteData {
-    emote: StvItem,
-}
-#[derive(Deserialize)]
-struct StvEmotes {
-    items: Vec<StvItem>,
-}
-#[derive(Deserialize, Clone)]
-struct StvItem {
-    id: String,
-    animated: bool,
-    // name: String,
-}
-
 #[command]
 #[aliases(e)]
 #[min_args(1)]
 async fn emote(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let q = args.current().unwrap();
-    let mut h = HeaderMap::new();
-    h.append(
-        "content-type",
-        HeaderValue::from_str("application/json").unwrap(),
-    );
-    let c = ClientBuilder::new().default_headers(h).build().unwrap();
     let typing = ctx.http.start_typing(msg.channel_id.0);
-    let (explicit_id, q) = {
-        let q = if q.len() >= 24 {
-            q.chars()
-                .rev()
-                .collect::<Vec<char>>()
-                .iter()
-                .take(24)
-                .rev()
-                .collect::<String>()
-        } else {
-            q.to_owned()
-        };
-        (q.chars().all(|c| c.is_ascii_hexdigit()), q)
-    };
-    let b = if explicit_id {
-        format!(
-            r#"{{"operationName":"Emote","variables":{{"id":"{q}"}},"query":"query Emote($id: ObjectID!) {{ emote(id: $id) {{ id animated name }} }} " }}"#
-        )
-    } else {
-        let (e, q) = if q.chars().count() >= 3
-            && ((q.starts_with('"') && q.ends_with('"'))
-                || (q.starts_with('\'') && q.ends_with('\'')))
-        {
-            ("true", q.trim_matches(|c| c == '"' || c == '\'').to_owned())
-        } else {
-            ("false", q)
-        };
-        format!(
-            r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1,"filter":{{"exact_match":{e},"case_sensitive":{e},"ignore_tags":true}}}},"query":"query SearchEmotes($query: String!, $limit: Int, $filter: EmoteSearchFilter) {{ emotes(query: $query, limit: $limit, filter: $filter) {{ items {{ id animated name }} }} }} " }}"#
-        )
-    };
-    let r = c.post("https://7tv.io/v3/gql").body(b).send().await?;
-    let t = r.json::<StvResponse>().await?;
-    let e = match t.data {
-        StvData::StvEmoteData(e) => e.emote,
-        StvData::StvEmotesData(e) => e.emotes.items.first().unwrap().to_owned(),
-    };
-    let id = &e.id;
-    let anim = &e.animated;
+    let emote_url = seven_tv::get_emote_png_gif_url(q).await?;
     if let Ok(typing) = typing {
         let _ = typing.stop();
     }
-    msg.channel_id
-        .say(
-            ctx,
-            format!(
-                "https://cdn.7tv.app/emote/{id}/4x.{}",
-                if !anim { "png" } else { "gif" }
-            ),
-        )
-        .await?;
+    msg.channel_id.say(ctx, emote_url).await?;
     Ok(())
 }
 
 const WEEKLY_REPORT_MEMBERS_FILE: &str = "weekly_report_members.json";
 type LoLAccount = (String, String);
 type AccountList = Vec<LoLAccount>;
-type GuildWeeklyReportMembers = HashMap<String, AccountList>;
-type WeeklyReportMembers = HashMap<u64, GuildWeeklyReportMembers>;
+type GuildWeeklyReportMembers = BTreeMap<String, AccountList>;
+type WeeklyReportMembers = BTreeMap<u64, GuildWeeklyReportMembers>;
 fn load_members() -> Result<WeeklyReportMembers, String> {
     let p = Path::new(WEEKLY_REPORT_MEMBERS_FILE);
     if !p.is_file() {
@@ -720,7 +635,7 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     Ok(())
 }
 
-async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClient> {
+async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
     let data_read = ctx.data.read().await;
     data_read
         .get::<RiotClient>()
@@ -730,7 +645,7 @@ async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClient> {
 
 async fn push_playtime_str(
     mut s: String,
-    client: &RiotAPIClient,
+    client: &RiotAPIClients,
     server: PlatformRoute,
     name: &str,
 ) -> String {
@@ -771,8 +686,7 @@ async fn push_playtime_str(
         Ok(p) => p,
         Err(e) => {
             s.push_str(&format!(
-                "Failed to get playtime for {} on {}: {}\n",
-                name, server, e
+                "Failed to get playtime for {name} on {server}: {e}\n",
             ));
             return s;
         }
@@ -780,8 +694,7 @@ async fn push_playtime_str(
     let emoji = is_sus(&secs);
     let (hrs, mins, secs) = seconds_to_hms(secs);
     s.push_str(&format!(
-        "[{}] {name}: {amount} games, {hrs}h{mins}m{secs}s {emoji}\n",
-        server
+        "[{server}] {name}: {amount} games, {hrs}h{mins}m{secs}s {emoji}\n",
     ));
     s
 }
@@ -827,7 +740,7 @@ async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
         Some(cm) => cm,
     };
     let typing = ctx.http.start_typing(cid);
-    for (member, accounts) in cm.iter().sorted() {
+    for (member, accounts) in cm {
         s.push_str(&format!("**{member}**:\n"));
         for (ser, name) in accounts {
             let server = match PlatformRoute::from_str(ser) {
@@ -912,8 +825,7 @@ fn is_sus(secs: &i64) -> String {
         "🙂"
     } else {
         ""
-    }
-    .to_owned()
+    }.into()
 }
 
 fn get_time() -> OffsetDateTime {
