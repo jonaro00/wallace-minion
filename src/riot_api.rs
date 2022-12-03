@@ -262,9 +262,9 @@ where
         self.map.insert(entry, v);
     }
     pub fn sorted_vec(self) -> Vec<(T, (f32, usize))> {
-        let mut v: Vec<(T, (f32, usize))> = self.map.clone().into_iter().collect();
+        let mut v: Vec<(T, (f32, usize))> = self.map.into_iter().collect();
         v.sort_by_key(|(_t, (p, g))| ((p / *g as f32) * 1000.0) as i32);
-        return v;
+        v
     }
 }
 

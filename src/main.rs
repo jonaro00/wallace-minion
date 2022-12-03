@@ -852,7 +852,7 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
             }
             for (m, d, _mes) in KORV_INGVAR_ANNIVERSARIES {
                 if month == *m && dom == *d && hour == 8 {
-                    () // TODO
+                    // TODO
                 }
             }
         }
