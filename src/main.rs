@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
 use std::env;
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -22,6 +21,8 @@ use serenity::prelude::TypeMapKey;
 use time::{Month, OffsetDateTime, Weekday};
 use tokio::time::{interval, Duration as tDuration};
 
+use wallace_minion::cool_text::{to_cool_text, Font};
+use wallace_minion::json_store::JsonStore;
 use wallace_minion::riot_api::{PlatformRoute, RiotAPIClients};
 use wallace_minion::set_store::SetStore;
 use wallace_minion::seven_tv;
@@ -371,7 +372,7 @@ async fn set_server_name(
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
 async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut s = SetStore::new(PathBuf::from(GUILD_FILE))?;
+    let mut s = SetStore::new(GUILD_FILE)?;
     s.insert(msg.guild(ctx).unwrap().id.0)?;
     msg.channel_id
         .say(ctx, "Added server to receive random names every night")
@@ -383,7 +384,7 @@ async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
 async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut s = SetStore::new(PathBuf::from(GUILD_FILE))?;
+    let mut s = SetStore::new(GUILD_FILE)?;
     s.remove(msg.guild(ctx).unwrap().id.0)?;
     msg.channel_id
         .say(ctx, "Removed server to receive random names every night")
@@ -391,7 +392,7 @@ async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-const TIMEOUT_LENGTH_SECONDS: i64 = 60;
+const TIMEOUT_SECS: i64 = 60;
 #[command]
 #[aliases(hammer, timeout)]
 #[only_in(guilds)]
@@ -400,21 +401,17 @@ const TIMEOUT_LENGTH_SECONDS: i64 = 60;
 // #[required_role("BigBrother")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let gid = msg.guild_id.ok_or("Failed to get guild")?;
-    loop {
-        if args.is_empty() {
-            break;
-        }
-        let arg = args.single::<String>()?;
-        let uid = arg
+    for arg in args.iter::<String>().map(|a| a.unwrap()) {
+        let uid: u64 = arg
             .strip_prefix("<@")
             .ok_or("Incorrect arg format")?
             .strip_suffix('>')
             .ok_or("Incorrect arg format")?
-            .parse::<u64>()?;
+            .parse()?;
         gid.edit_member(ctx, UserId(uid), |m| {
             m.disable_communication_until(
                 Timestamp::now()
-                    .checked_add_signed(cDuration::seconds(TIMEOUT_LENGTH_SECONDS))
+                    .checked_add_signed(cDuration::seconds(TIMEOUT_SECS))
                     .expect("Failed to add date")
                     .to_rfc3339(),
             )
@@ -426,9 +423,9 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 ctx,
                 format!(
                     "{}🔨🙂 Timed out <@{}> for {} seconds.",
-                    to_cool_text("BONK!", CoolTextFont::BoldScript),
+                    to_cool_text("BONK!", Font::BoldScript),
                     uid,
-                    TIMEOUT_LENGTH_SECONDS
+                    TIMEOUT_SECS,
                 ),
             )
             .await;
@@ -445,89 +442,38 @@ struct CoolText;
 #[sub_commands(boldfraktur, bold, bolditalic, boldscript, monospace)]
 #[min_args(1)]
 async fn cooltext(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    do_cool_text(ctx, msg, &args, CoolTextFont::BoldFraktur).await?; // default
-    Ok(())
+    boldfraktur(ctx, msg, args).await
 }
 #[command]
 #[aliases(bf)]
 async fn boldfraktur(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    do_cool_text(ctx, msg, &args, CoolTextFont::BoldFraktur).await?;
-    Ok(())
+    do_cool_text(ctx, msg, args, Font::BoldFraktur).await
 }
 #[command]
 #[aliases(b)]
 async fn bold(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    do_cool_text(ctx, msg, &args, CoolTextFont::Bold).await?;
-    Ok(())
+    do_cool_text(ctx, msg, args, Font::Bold).await
 }
 #[command]
 #[aliases(bi)]
 async fn bolditalic(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    do_cool_text(ctx, msg, &args, CoolTextFont::BoldItalic).await?;
-    Ok(())
+    do_cool_text(ctx, msg, args, Font::BoldItalic).await
 }
 #[command]
 #[aliases(bs)]
 async fn boldscript(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    do_cool_text(ctx, msg, &args, CoolTextFont::BoldScript).await?;
-    Ok(())
+    do_cool_text(ctx, msg, args, Font::BoldScript).await
 }
 #[command]
 #[aliases(m)]
 async fn monospace(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    do_cool_text(ctx, msg, &args, CoolTextFont::Monospace).await?;
-    Ok(())
+    do_cool_text(ctx, msg, args, Font::Monospace).await
 }
-async fn do_cool_text(
-    ctx: &Context,
-    msg: &Message,
-    args: &Args,
-    font: CoolTextFont,
-) -> CommandResult {
+async fn do_cool_text(ctx: &Context, msg: &Message, args: Args, font: Font) -> CommandResult {
     msg.channel_id
         .say(ctx, to_cool_text(args.rest(), font))
         .await?;
     Ok(())
-}
-enum CoolTextFont {
-    BoldFraktur,
-    Bold,
-    BoldItalic,
-    BoldScript,
-    Monospace,
-}
-fn cool_text_bases(font: CoolTextFont) -> Bases {
-    match font {
-        CoolTextFont::BoldFraktur => (Some(0x1D56C), Some(0x1D586), None),
-        CoolTextFont::Bold => (Some(0x1D400), Some(0x1D41A), Some(0x1D7CE)),
-        CoolTextFont::BoldItalic => (Some(0x1D468), Some(0x1D482), None),
-        CoolTextFont::BoldScript => (Some(0x1D4D0), Some(0x1D4EA), None),
-        CoolTextFont::Monospace => (Some(0x1D670), Some(0x1D68A), Some(0x1D7F6)),
-    }
-}
-type Bases = (Option<u32>, Option<u32>, Option<u32>); // upper, lower, numeric
-const ASCII_BASES: Bases = (Some(0x41), Some(0x61), Some(0x30));
-fn to_cool_text(text: &str, font: CoolTextFont) -> String {
-    let bases = cool_text_bases(font);
-    let mut s = String::new();
-    for c in text.chars() {
-        if c.is_ascii_uppercase() && bases.0.is_some() {
-            s.push(
-                char::from_u32((c as u32) - ASCII_BASES.0.unwrap() + bases.0.unwrap()).unwrap_or(c),
-            );
-        } else if c.is_ascii_lowercase() && bases.1.is_some() {
-            s.push(
-                char::from_u32((c as u32) - ASCII_BASES.1.unwrap() + bases.1.unwrap()).unwrap_or(c),
-            );
-        } else if c.is_ascii_digit() && bases.2.is_some() {
-            s.push(
-                char::from_u32((c as u32) - ASCII_BASES.2.unwrap() + bases.2.unwrap()).unwrap_or(c),
-            );
-        } else {
-            s.push(c);
-        }
-    }
-    s
 }
 
 #[group]
@@ -553,27 +499,6 @@ type LoLAccount = (String, String);
 type AccountList = Vec<LoLAccount>;
 type GuildWeeklyReportMembers = BTreeMap<String, AccountList>;
 type WeeklyReportMembers = BTreeMap<u64, GuildWeeklyReportMembers>;
-fn load_members() -> Result<WeeklyReportMembers, String> {
-    let p = Path::new(WEEKLY_REPORT_MEMBERS_FILE);
-    if !p.is_file() {
-        std::fs::write(p, "{}").unwrap();
-    }
-    std::fs::read_to_string(p)
-        // .map(|s| if s == "" { "{}".to_owned() } else { s })
-        .map_err(|err| format!("Failed to read file: {err}"))
-        .and_then(|s| {
-            serde_json::from_str::<WeeklyReportMembers>(&s)
-                .map_err(|err| format!("Failed to parse JSON: {err}"))
-        })
-}
-fn save_members(m: WeeklyReportMembers) -> Result<(), String> {
-    serde_json::to_string_pretty::<WeeklyReportMembers>(&m)
-        .map_err(|err| format!("Failed to convert to JSON: {err}"))
-        .and_then(|s| {
-            std::fs::write(WEEKLY_REPORT_MEMBERS_FILE, s)
-                .map_err(|err| format!("Failed to write file: {err}"))
-        })
-}
 
 #[group]
 #[commands(lol)]
@@ -592,7 +517,8 @@ async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[min_args(2)]
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let mut m = load_members()?;
+    let store = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE);
+    let mut m: WeeklyReportMembers = store.read().map_err(|_| "Failed to read members.")?;
     let channel = msg.channel_id.0;
     let member = args.current().unwrap().to_owned();
     m.entry(channel)
@@ -619,7 +545,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             .say(ctx, format!("Adding [{server}] {name} to {member}."))
             .await;
     }
-    if let Err(err) = save_members(m) {
+    if let Err(err) = store.write(&Some(m)).map_err(|_| "Failed to save file.") {
         let _ = msg
             .channel_id
             .say(ctx, format!("Failed to add accounts: {err}"))
@@ -630,7 +556,8 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[command]
 #[num_args(1)]
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let mut m = load_members()?;
+    let store = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE);
+    let mut m: WeeklyReportMembers = store.read().map_err(|_| "Failed to read members.")?;
     let member = args.current().unwrap().to_owned();
     let channel = msg.channel_id.0;
     let cm = match m.get_mut(&channel) {
@@ -658,7 +585,7 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             v.len()
         }
     };
-    if let Err(err) = save_members(m) {
+    if let Err(err) = store.write(&Some(m)).map_err(|_| "Failed to save file.") {
         let _ = msg
             .channel_id
             .say(ctx, format!("Failed to remove member: {err}"))
@@ -765,7 +692,9 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let mut s = String::from("**Weekly playtime:**\n");
-    let m = load_members()?;
+    let m: WeeklyReportMembers = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE)
+        .read()
+        .map_err(|_| "Failed to read members.")?;
     let cid = channel.0;
     let cm = match m.get(&cid) {
         None => {
@@ -862,7 +791,8 @@ fn is_sus(secs: &i64) -> String {
         "🙂"
     } else {
         ""
-    }.into()
+    }
+    .into()
 }
 
 fn get_time() -> OffsetDateTime {
@@ -900,7 +830,7 @@ async fn schedule_loop(ctx: Context, guilds: Vec<GuildId>) {
 }
 
 async fn nightly_name_update(ctx: &Context, guilds: &Vec<GuildId>, day: &Weekday) {
-    let members = match SetStore::new(PathBuf::from(GUILD_FILE)) {
+    let members = match SetStore::new(GUILD_FILE) {
         Ok(m) => m,
         Err(_) => {
             println!("Failed to load name change members :(");
@@ -920,7 +850,12 @@ async fn nightly_name_update(ctx: &Context, guilds: &Vec<GuildId>, day: &Weekday
 }
 
 async fn weekly_lol_report(ctx: &Context) {
-    let m = load_members().unwrap();
+    let m: WeeklyReportMembers = match JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE).read() {
+        Ok(m) => m,
+        Err(_) => {
+            return;
+        }
+    };
     for cid in m.keys() {
         let _ = lol_report(ctx, ChannelId(*cid)).await;
     }

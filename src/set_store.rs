@@ -1,18 +1,19 @@
 use std::collections::HashSet;
+use std::fs::File;
 use std::hash::Hash;
-use std::path::PathBuf;
+use std::path::Path;
 use std::str::FromStr;
 
-pub struct SetStore<T: ToString + FromStr + Eq + Hash + Clone> {
+pub struct SetStore<T, P> {
     set: HashSet<T>,
-    path: PathBuf,
+    path: P,
 }
 
-impl<T: ToString + FromStr + Eq + Hash + Clone> SetStore<T> {
-    pub fn new(path: PathBuf) -> Result<SetStore<T>, std::io::Error> {
+impl<T: ToString + FromStr + Eq + Hash + Clone, P: AsRef<Path>> SetStore<T, P> {
+    pub fn new(path: P) -> Result<SetStore<T, P>, std::io::Error> {
         let mut set = HashSet::new();
-        if !path.is_file() {
-            std::fs::write(&path, "")?;
+        if !path.as_ref().is_file() {
+            File::create(&path)?;
         }
         let contents = std::fs::read_to_string(&path)?;
         for line in contents.lines() {
