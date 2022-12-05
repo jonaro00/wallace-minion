@@ -48,7 +48,7 @@ pub async fn get_emote_png_gif_url(q: &str) -> Result<String, Box<dyn Error + Sy
         ("false", q.to_owned())
     };
     if q.is_empty() {
-        return Err("Query is emtpy.".into());
+        return Err("Query is empty.".into());
     };
     if q.chars().any(|c| c == '"' || c == '\\') || !q.chars().all(|c| c.is_ascii_graphic()) {
         return Err("Query contains invalid characters.".into());
@@ -70,12 +70,18 @@ pub async fn get_emote_png_gif_url(q: &str) -> Result<String, Box<dyn Error + Sy
         .post("https://7tv.io/v3/gql")
         .body(req_body)
         .send()
-        .await?
+        .await
+        .map_err(|_| "Request to 7TV failed.")?
         .json()
-        .await?;
+        .await
+        .map_err(|_| "Invalid API response.")?;
     let emote = match r.data {
         StvData::StvEmoteData(e) => e.emote,
-        StvData::StvEmotesData(e) => e.emotes.items.first().unwrap().to_owned(),
+        StvData::StvEmotesData(e) => match e.emotes.items.first() {
+            Some(i) => i,
+            None => return Err("No emote found.".into()),
+        }
+        .to_owned(),
     };
     let emote_id = &emote.id;
     let file_type = if emote.animated { "gif" } else { "png" };

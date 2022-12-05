@@ -486,7 +486,9 @@ struct Emote;
 async fn emote(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let q = args.current().unwrap();
     let typing = ctx.http.start_typing(msg.channel_id.0);
-    let emote_url = seven_tv::get_emote_png_gif_url(q).await?;
+    let emote_url = seven_tv::get_emote_png_gif_url(q)
+        .await
+        .unwrap_or_else(|e| e.to_string());
     if let Ok(typing) = typing {
         let _ = typing.stop();
     }
