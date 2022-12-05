@@ -202,7 +202,9 @@ async fn main() {
         .group(&EMOTE_GROUP);
     let mut client = DiscordClient::builder(
         discord_token,
-        GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
+        GatewayIntents::non_privileged()
+            | GatewayIntents::MESSAGE_CONTENT
+            | GatewayIntents::GUILD_MESSAGES,
     )
     .event_handler(Handler)
     .framework(framework)
@@ -287,8 +289,9 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
         DispatchError::TooManyArguments { max, given } => {
             format!("Max arguments allowed is {}, but got {} 😋", max, given)
         }
-        DispatchError::LackingPermissions(_perm) => "You can't do that 😋".to_owned(),
-        DispatchError::LackingRole => "You can't do that 😋".to_owned(),
+        DispatchError::LackingPermissions(_) | DispatchError::LackingRole => {
+            "You can't do that 😋".to_owned()
+        }
         DispatchError::OnlyForGuilds => "That can only be done in servers 😋".to_owned(),
         _ => {
             println!(
@@ -303,9 +306,18 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
     let _ = msg.channel_id.say(ctx, &s).await;
 }
 
+fn parse_tagged_uid(s: &str) -> Result<u64, String> {
+    s.strip_prefix("<@")
+        .and_then(|s| s.strip_suffix('>'))
+        .and_then(|s| s.parse().ok())
+        .ok_or("Incorrect user tag".to_owned())
+}
+
 #[group]
 #[commands(
     ping,
+    delete,
+    gamba,
     power,
     defaultname,
     randomname,
@@ -321,6 +333,33 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
         let _ = msg.react(ctx, '👑').await;
     }
     let _ = tokio::join!(msg.react(ctx, '👍'), msg.channel_id.say(ctx, "Pong!"),);
+    Ok(())
+}
+
+#[command]
+async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
+    msg.delete(ctx).await?;
+    if let Some(r) = msg.referenced_message.as_deref() {
+        if r.author.id == ctx.cache.current_user().id {
+            r.delete(ctx).await?;
+        }
+    }
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[num_args(1)]
+async fn gamba(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let mut rng: StdRng = SeedableRng::from_entropy();
+    let uid: u64 = parse_tagged_uid(args.current().unwrap())?;
+    if rng.gen_ratio(1, 5) {
+        // Win
+        bonk_user(ctx, msg, uid).await?;
+    } else {
+        // Loss
+        bonk_user(ctx, msg, msg.author.id.0).await?;
+    }
     Ok(())
 }
 
@@ -393,6 +432,32 @@ async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 const TIMEOUT_SECS: i64 = 60;
+async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
+    let gid = msg.guild_id.ok_or("Failed to get guild")?;
+    gid.edit_member(ctx, UserId(uid), |m| {
+        m.disable_communication_until(
+            Timestamp::now()
+                .checked_add_signed(cDuration::seconds(TIMEOUT_SECS))
+                .expect("Failed to add date")
+                .to_rfc3339(),
+        )
+    })
+    .await?;
+    let _ = msg
+        .channel_id
+        .say(
+            ctx,
+            format!(
+                "{}🔨🙂 Timed out <@{}> for {} seconds.",
+                to_cool_text("BONK!", Font::BoldScript),
+                uid,
+                TIMEOUT_SECS,
+            ),
+        )
+        .await;
+    Ok(())
+}
+
 #[command]
 #[aliases(hammer, timeout)]
 #[only_in(guilds)]
@@ -400,35 +465,9 @@ const TIMEOUT_SECS: i64 = 60;
 #[required_permissions("ADMINISTRATOR")]
 // #[required_role("BigBrother")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let gid = msg.guild_id.ok_or("Failed to get guild")?;
     for arg in args.iter::<String>().map(|a| a.unwrap()) {
-        let uid: u64 = arg
-            .strip_prefix("<@")
-            .ok_or("Incorrect arg format")?
-            .strip_suffix('>')
-            .ok_or("Incorrect arg format")?
-            .parse()?;
-        gid.edit_member(ctx, UserId(uid), |m| {
-            m.disable_communication_until(
-                Timestamp::now()
-                    .checked_add_signed(cDuration::seconds(TIMEOUT_SECS))
-                    .expect("Failed to add date")
-                    .to_rfc3339(),
-            )
-        })
-        .await?;
-        let _ = msg
-            .channel_id
-            .say(
-                ctx,
-                format!(
-                    "{}🔨🙂 Timed out <@{}> for {} seconds.",
-                    to_cool_text("BONK!", Font::BoldScript),
-                    uid,
-                    TIMEOUT_SECS,
-                ),
-            )
-            .await;
+        let uid: u64 = parse_tagged_uid(&arg)?;
+        bonk_user(ctx, msg, uid).await?;
     }
     Ok(())
 }
