@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use reqwest::header::HeaderMap;
 use reqwest::ClientBuilder;
 use serde::Deserialize;
@@ -31,33 +33,39 @@ struct StvItem {
     // name: String,
 }
 
-pub async fn get_emote_png_gif_url(query: &str) -> Result<String, reqwest::Error> {
-    let mut h = HeaderMap::new();
-    h.append("content-type", "application/json".parse().unwrap());
-    let c = ClientBuilder::new().default_headers(h).build().unwrap();
-    let q = if query.len() >= 24 {
-        &query[query.chars().count() - 24..]
-    } else {
-        query
+pub async fn get_emote_png_gif_url(q: &str) -> Result<String, Box<dyn Error + Sync + Send>> {
+    if q.chars().count() > 200 {
+        return Err("Query too long.".into());
     };
-    let explicit_id = q.chars().all(|c| c.is_ascii_hexdigit());
+    let (exact, q) = if q.chars().count() >= 2
+        && ((q.starts_with('"') && q.ends_with('"')) || (q.starts_with('\'') && q.ends_with('\'')))
+    {
+        let mut s = q.to_string();
+        s.pop();
+        s.remove(0);
+        ("true", s)
+    } else {
+        ("false", q.to_owned())
+    };
+    if q.is_empty() {
+        return Err("Query is emtpy.".into());
+    };
+    if q.chars().any(|c| c == '"' || c == '\\') || !q.chars().all(|c| c.is_ascii_graphic()) {
+        return Err("Query contains invalid characters.".into());
+    };
+    let explicit_id = q.chars().count() == 24 && q.chars().all(|c| c.is_ascii_hexdigit());
     let req_body = if explicit_id {
         format!(
             r#"{{"operationName":"Emote","variables":{{"id":"{q}"}},"query":"query Emote($id: ObjectID!) {{ emote(id: $id) {{ id animated name }} }} " }}"#
         )
     } else {
-        let (e, q) = if q.chars().count() >= 3
-            && ((q.starts_with('"') && q.ends_with('"'))
-                || (q.starts_with('\'') && q.ends_with('\'')))
-        {
-            ("true", q.trim_matches(|c| c == '"' || c == '\''))
-        } else {
-            ("false", q)
-        };
         format!(
-            r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1,"filter":{{"exact_match":{e},"case_sensitive":{e},"ignore_tags":true}}}},"query":"query SearchEmotes($query: String!, $limit: Int, $filter: EmoteSearchFilter) {{ emotes(query: $query, limit: $limit, filter: $filter) {{ items {{ id animated name }} }} }} " }}"#
+            r#"{{"operationName":"SearchEmotes","variables":{{"query":"{q}","limit":1,"filter":{{"exact_match":{exact},"case_sensitive":{exact},"ignore_tags":true}}}},"query":"query SearchEmotes($query: String!, $limit: Int, $filter: EmoteSearchFilter) {{ emotes(query: $query, limit: $limit, filter: $filter) {{ items {{ id animated name }} }} }} " }}"#
         )
     };
+    let mut h = HeaderMap::new();
+    h.append("content-type", "application/json".parse().unwrap());
+    let c = ClientBuilder::new().default_headers(h).build().unwrap();
     let r: StvResponse = c
         .post("https://7tv.io/v3/gql")
         .body(req_body)
