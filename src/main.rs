@@ -455,6 +455,13 @@ async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
             ),
         )
         .await;
+    let _ = msg
+        .channel_id
+        .say(
+            ctx,
+            "https://cdn.7tv.app/emote/631b61a98cf0978e2955b04f/2x.gif",
+        )
+        .await;
     Ok(())
 }
 
