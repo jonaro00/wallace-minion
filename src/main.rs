@@ -71,6 +71,8 @@ const GUILD_NAME_SUBJECTS: &[&str] = &[
     "Gordon",
     "Wallace",
     "Gromit",
+    "Berit",
+    "Herbert",
     "KorvIngvar",
     "Knugen",
     "EggMan",
@@ -144,6 +146,7 @@ const GUILD_NAME_OBJECTS: &[&str] = &[
     "Plugg",
     "Kubb",
     "Nörd",
+    "Fika",
     "Hatt",
     "Pingvin",
     "Välfärds",
@@ -338,7 +341,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.delete(ctx).await?;
+    let _ = msg.delete(ctx).await;
     if let Some(r) = msg.referenced_message.as_deref() {
         if r.author.id == ctx.cache.current_user().id {
             r.delete(ctx).await?;
