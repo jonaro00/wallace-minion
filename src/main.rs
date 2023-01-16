@@ -4,28 +4,33 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Duration as cDuration;
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
-use serenity::async_trait;
-use serenity::client::{Client as DiscordClient, Context, EventHandler};
-use serenity::framework::standard::macros::{command, group, hook};
-use serenity::framework::standard::{
-    Args, CommandError, CommandResult, DispatchError, StandardFramework,
+use rand::{rngs::StdRng, Rng, SeedableRng};
+use serenity::framework::standard::help_commands::with_embeds;
+use serenity::framework::standard::HelpOptions;
+use serenity::{
+    async_trait,
+    client::{Client as DiscordClient, Context, EventHandler},
+    framework::standard::{
+        macros::{command, group, help, hook},
+        Args, CommandError, CommandGroup, CommandResult, DispatchError, StandardFramework,
+    },
+    http::Http,
+    model::prelude::{
+        Activity, ChannelId, GatewayIntents, Guild, GuildId, Message, Ready, ResumedEvent,
+        Timestamp, UserId,
+    },
+    prelude::TypeMapKey,
 };
-use serenity::http::Http;
-use serenity::model::prelude::{
-    Activity, ChannelId, GatewayIntents, Guild, GuildId, Message, Ready, ResumedEvent, Timestamp,
-    UserId,
-};
-use serenity::prelude::TypeMapKey;
 use time::{Month, OffsetDateTime, Weekday};
 use tokio::time::{interval, Duration as tDuration};
 
-use wallace_minion::cool_text::{to_cool_text, Font};
-use wallace_minion::json_store::JsonStore;
-use wallace_minion::riot_api::{PlatformRoute, RiotAPIClients};
-use wallace_minion::set_store::SetStore;
-use wallace_minion::seven_tv;
+use wallace_minion::{
+    cool_text::{to_cool_text, Font},
+    json_store::JsonStore,
+    riot_api::{PlatformRoute, RiotAPIClients},
+    set_store::SetStore,
+    seven_tv,
+};
 
 const GUILD_FILE: &str = "name_change_guilds.txt";
 
@@ -202,7 +207,8 @@ async fn main() {
         .group(&COOLTEXT_GROUP)
         .group(&LOL_GROUP)
         .group(&TFT_GROUP)
-        .group(&EMOTE_GROUP);
+        .group(&EMOTE_GROUP)
+        .help(&MY_HELP);
     let mut client = DiscordClient::builder(
         discord_token,
         GatewayIntents::non_privileged()
@@ -316,21 +322,35 @@ fn parse_tagged_uid(s: &str) -> Result<u64, String> {
         .ok_or("Incorrect user tag".to_owned())
 }
 
+#[help]
+async fn my_help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
+
 #[group]
 #[commands(
     ping,
+    power,
     delete,
     gamba,
-    power,
+    bonk,
     defaultname,
     randomname,
     randomnameon,
-    randomnameoff,
-    bonk
+    randomnameoff
 )]
 struct General;
 
 #[command]
+#[description("Challenge me to a game of table tennis! (and check if I'm alive)")]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     if msg.author.id.0 == 224233166024474635 {
         let _ = msg.react(ctx, '👑').await;
@@ -340,6 +360,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[description("Censor me. Reply to a message from me with this command to delete it.")]
 async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
     let _ = msg.delete(ctx).await;
     if let Some(r) = msg.referenced_message.as_deref() {
@@ -353,6 +374,11 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 #[num_args(1)]
+#[description(
+    "Summon mods in chat to start the GAMBA. Tag a user and they might get bonked. Or you."
+)]
+#[usage("<user>")]
+#[example("@Yxaria")]
 async fn gamba(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mut rng: StdRng = SeedableRng::from_entropy();
     let uid: u64 = parse_tagged_uid(args.current().unwrap())?;
@@ -375,6 +401,7 @@ async fn power(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[description("Set the server name to the default.")]
 #[only_in(guilds)]
 async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), GUILD_DEFAULT_NAME).await
@@ -383,6 +410,7 @@ async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
+#[description("Set the server name to a random one.")]
 async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name()).await
 }
@@ -413,6 +441,7 @@ async fn set_server_name(
 #[command]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
+#[description("Turn on random server name every day.")]
 async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
     let mut s = SetStore::new(GUILD_FILE)?;
     s.insert(msg.guild(ctx).unwrap().id.0)?;
@@ -425,6 +454,7 @@ async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
+#[description("Turn on random server name every day.")]
 async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
     let mut s = SetStore::new(GUILD_FILE)?;
     s.remove(msg.guild(ctx).unwrap().id.0)?;
@@ -486,6 +516,7 @@ async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
 #[min_args(1)]
 #[required_permissions("ADMINISTRATOR")]
 // #[required_role("BigBrother")]
+#[description("Bonk a user.")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     for arg in args.iter::<String>().map(|a| a.unwrap()) {
         let uid: u64 = parse_tagged_uid(&arg)?;
@@ -502,6 +533,9 @@ struct CoolText;
 #[aliases(ct)]
 #[sub_commands(boldfraktur, bold, bolditalic, boldscript, monospace)]
 #[min_args(1)]
+#[description("Make some cool text in one of a few different fonts.")]
+#[usage("[font] <text>")]
+#[example("bf Hello there!")]
 async fn cooltext(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     boldfraktur(ctx, msg, args).await
 }
@@ -544,6 +578,13 @@ struct Emote;
 #[command]
 #[aliases(e)]
 #[min_args(1)]
+#[description(
+    "Search and post an emote from 7TV. Use quotes for an exact search match. Use an emote id for a specific emote."
+)]
+#[usage("<search_string|emote_id>")]
+#[example("xdd")]
+#[example("\"DogLookingSussyAndCold\"")]
+#[example("60edf43ba60faa2a91cfb082")]
 async fn emote(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let q = args.current().unwrap();
     let typing = ctx.http.start_typing(msg.channel_id.0);
@@ -569,16 +610,21 @@ struct LoL;
 
 #[command]
 #[sub_commands(playtime, weekly)]
+#[description("LoL+TFT playtime.")]
 async fn lol(_ctx: &Context, _msg: &Message, mut _args: Args) -> CommandResult {
     Err(Box::new(serenity::Error::Other("Not implemented")))
 }
 #[command]
 #[sub_commands(add, remove)]
+#[description("Show weekly playtime for every summoner added with 'add'.")]
 async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
     lol_report(ctx, msg.channel_id).await
 }
 #[command]
 #[min_args(2)]
+#[description("Add a summoner to the weekly report every Monday morning.")]
+#[usage("<name> <summoners...>")]
+#[example("Me \"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let store = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE);
     let mut m: WeeklyReportMembers = store.read().map_err(|_| "Failed to read members.")?;
@@ -618,6 +664,9 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 #[command]
 #[num_args(1)]
+#[description("Remove all summoners associated with a name from the weekly report every Monday morning.")]
+#[usage("<name>")]
+#[example("Me")]
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let store = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE);
     let mut m: WeeklyReportMembers = store.read().map_err(|_| "Failed to read members.")?;
@@ -729,6 +778,9 @@ async fn push_playtime_str(
 #[command]
 #[aliases(pt)]
 #[min_args(1)]
+#[description("Calculate LoL+TFT playtime for summoner(s).")]
+#[usage("<summoners...>")]
+#[example("\"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
 async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let typing = ctx.http.start_typing(msg.channel_id.0);
@@ -798,12 +850,16 @@ struct TFT;
 
 #[command]
 #[sub_commands(analysis)]
+#[description("TFT meta analysis.")]
 async fn tft(_ctx: &Context, _msg: &Message, mut _args: Args) -> CommandResult {
     Err(Box::new(serenity::Error::Other("Not implemented")))
 }
 
 #[command]
-#[min_args(1)]
+#[num_args(1)]
+#[description("Calculate TFT stats for the current set.")]
+#[usage("<summoner>")]
+#[example("\"EUNE:MupDef Crispy\"")]
 async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let arg = args.current().unwrap().to_owned();
