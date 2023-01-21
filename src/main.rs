@@ -238,23 +238,23 @@ const REACTIONS: [char; 4] = ['😳', '😏', '😊', '😎'];
 struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
+    async fn ready(&self, ctx: Context, data: Ready) {
+        println!("{} is connected!", data.user.name);
+        let activity = if cfg!(debug_assertions) {
+            Activity::playing("on a construction site 🔨🙂")
+        } else {
+            Activity::watching("you 🔨🙂 | !help")
+        };
+        let _ = ctx.set_activity(activity).await;
+    }
+
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
-        println!("Loaded guilds! ({})", guilds.len());
+        println!("Loaded {} guilds.", guilds.len());
         tokio::spawn(schedule_loop(ctx, guilds)).await.unwrap();
     }
 
-    async fn ready(&self, ctx: Context, data: Ready) {
-        println!("{} is connected!", data.user.name);
-        let status = if cfg!(debug_assertions) {
-            "construction work 🔨🙂".to_owned()
-        } else {
-            format!("you🔨🙂(v{}) !help", env!("CARGO_PKG_VERSION"))
-        };
-        let _ = ctx.set_activity(Activity::watching(status)).await;
-    }
-
     async fn resume(&self, _ctx: Context, _r: ResumedEvent) {
-        println!("Reconnected!");
+        println!("Reconnected.");
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -319,7 +319,7 @@ fn parse_tagged_uid(s: &str) -> Result<u64, String> {
     s.strip_prefix("<@")
         .and_then(|s| s.strip_suffix('>'))
         .and_then(|s| s.parse().ok())
-        .ok_or("Incorrect user tag".to_owned())
+        .ok_or_else(|| "Incorrect user tag".to_owned())
 }
 
 #[help]
@@ -338,6 +338,7 @@ async fn my_help(
 #[group]
 #[commands(
     ping,
+    version,
     power,
     delete,
     gamba,
@@ -356,6 +357,26 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
         let _ = msg.react(ctx, '👑').await;
     }
     let _ = tokio::join!(msg.react(ctx, '👍'), msg.channel_id.say(ctx, "Pong!"),);
+    Ok(())
+}
+
+#[command]
+#[description("Check my IQ! (output is in semver format)")]
+async fn version(ctx: &Context, msg: &Message) -> CommandResult {
+    msg.channel_id
+        .say(
+            ctx,
+            format!(
+                "v{}{}",
+                env!("CARGO_PKG_VERSION"),
+                if cfg!(debug_assertions) {
+                    " (development)"
+                } else {
+                    ""
+                },
+            ),
+        )
+        .await?;
     Ok(())
 }
 
@@ -381,7 +402,7 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
 #[example("@Yxaria")]
 async fn gamba(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mut rng: StdRng = SeedableRng::from_entropy();
-    let uid: u64 = parse_tagged_uid(args.current().unwrap())?;
+    let uid = parse_tagged_uid(args.current().unwrap())?;
     if rng.gen_ratio(1, 5) {
         // Win
         bonk_user(ctx, msg, uid).await?;
@@ -519,7 +540,7 @@ async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
 #[description("Bonk a user.")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     for arg in args.iter::<String>().map(|a| a.unwrap()) {
-        let uid: u64 = parse_tagged_uid(&arg)?;
+        let uid = parse_tagged_uid(&arg)?;
         bonk_user(ctx, msg, uid).await?;
     }
     Ok(())

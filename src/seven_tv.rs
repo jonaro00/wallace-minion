@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, CONTENT_TYPE};
 use reqwest::ClientBuilder;
 use serde::Deserialize;
 
@@ -64,7 +64,7 @@ pub async fn get_emote_png_gif_url(q: &str) -> Result<String, Box<dyn Error + Sy
         )
     };
     let mut h = HeaderMap::new();
-    h.append("content-type", "application/json".parse().unwrap());
+    h.append(CONTENT_TYPE, "application/json".parse().unwrap());
     let c = ClientBuilder::new().default_headers(h).build().unwrap();
     let r: StvResponse = c
         .post("https://7tv.io/v3/gql")
