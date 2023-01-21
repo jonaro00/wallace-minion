@@ -5,14 +5,14 @@ use std::sync::Arc;
 
 use chrono::Duration as cDuration;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use serenity::framework::standard::help_commands::with_embeds;
-use serenity::framework::standard::HelpOptions;
 use serenity::{
     async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
     framework::standard::{
+        help_commands::with_embeds,
         macros::{command, group, help, hook},
-        Args, CommandError, CommandGroup, CommandResult, DispatchError, StandardFramework,
+        Args, CommandError, CommandGroup, CommandResult, DispatchError, HelpOptions,
+        StandardFramework,
     },
     http::Http,
     model::prelude::{
@@ -248,7 +248,7 @@ impl EventHandler for Handler {
         let status = if cfg!(debug_assertions) {
             "construction work 🔨🙂".to_owned()
         } else {
-            format!("you 🔨🙂 (v{})", env!("CARGO_PKG_VERSION"))
+            format!("you🔨🙂(v{}) !help", env!("CARGO_PKG_VERSION"))
         };
         let _ = ctx.set_activity(Activity::watching(status)).await;
     }
@@ -664,7 +664,9 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 #[command]
 #[num_args(1)]
-#[description("Remove all summoners associated with a name from the weekly report every Monday morning.")]
+#[description(
+    "Remove all summoners associated with a name from the weekly report every Monday morning."
+)]
 #[usage("<name>")]
 #[example("Me")]
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
