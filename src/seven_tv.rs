@@ -89,3 +89,50 @@ pub async fn get_emote_png_gif_url(q: &str) -> Result<String, Box<dyn Error + Sy
         "https://cdn.7tv.app/emote/{emote_id}/4x.{file_type}",
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn catjam() {
+        let res = get_emote_png_gif_url("catjam").await.unwrap();
+        assert!(res.starts_with("https://"));
+        assert!(res.contains("60ae7316f7c927fad14e6ca2"));
+        assert!(res.ends_with(".gif"));
+    }
+    #[tokio::test]
+    async fn catjam_quoted() {
+        let res = get_emote_png_gif_url("\"catJAM\"").await.unwrap();
+        assert!(res.starts_with("https://"));
+        assert!(res.contains("60ae7316f7c927fad14e6ca2"));
+        assert!(res.ends_with(".gif"));
+    }
+    #[tokio::test]
+    async fn sadge() {
+        let res = get_emote_png_gif_url("sadge").await.unwrap();
+        assert!(res.starts_with("https://"));
+        assert!(res.contains("603cac391cd55c0014d989be"));
+        assert!(res.ends_with(".png"));
+    }
+    #[tokio::test]
+    async fn no_query() {
+        assert!(get_emote_png_gif_url("").await.is_err());
+    }
+    #[tokio::test]
+    async fn too_long_query() {
+        let s = "omegalul".repeat(30);
+        assert!(get_emote_png_gif_url(&s).await.is_err());
+    }
+    #[tokio::test]
+    async fn invalid_query() {
+        assert!(get_emote_png_gif_url(" ").await.is_err());
+        assert!(get_emote_png_gif_url("\"\"\"").await.is_err());
+        assert!(get_emote_png_gif_url("\"\'\"").await.is_err());
+        assert!(get_emote_png_gif_url("\\").await.is_err());
+        assert!(get_emote_png_gif_url("\n").await.is_err());
+    }
+    #[tokio::test]
+    async fn not_found() {
+        assert!(get_emote_png_gif_url("somethingthatwillprobablyneverexist").await.is_err());
+    }
+}
