@@ -26,7 +26,7 @@ impl DBHandler {
         arg: Option<String>,
         channel_id: u64,
     ) -> Result<task::Model, &str> {
-        self.create_channel(channel_id).await?;
+        let _ = self.create_channel(channel_id).await;
         Task::insert(task::ActiveModel {
             id: NotSet,
             cron: Set(cron),

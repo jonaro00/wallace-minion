@@ -2,15 +2,30 @@ pub mod cool_text;
 pub mod riot_api;
 pub mod seven_tv;
 
+use chrono::Duration;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     client::Context,
     framework::standard::CommandResult,
-    model::prelude::{Message, Timestamp, UserId},
+    model::prelude::{Guild, Message, Timestamp, UserId},
 };
-use time::{format_description::well_known::Iso8601, Duration};
 
 use cool_text::{to_cool_text, Font};
+
+pub async fn set_server_name(
+    ctx: &Context,
+    mut guild: Guild,
+    reply_to: Option<&Message>,
+    name: &str,
+) -> CommandResult {
+    guild.edit(ctx, |g| g.name(name)).await?;
+    if let Some(msg) = reply_to {
+        msg.channel_id
+            .say(ctx, format!("Set server name to '{}'", name))
+            .await?;
+    }
+    Ok(())
+}
 
 const TIMEOUT_SECS: i64 = 60;
 const BONK_EMOTES: &[&str] = &[
@@ -33,10 +48,11 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult 
         .edit_member(ctx, UserId(uid), |m| {
             m.disable_communication_until(
                 Timestamp::now()
-                    .checked_add(Duration::seconds(TIMEOUT_SECS))
+                    .checked_add_signed(Duration::seconds(TIMEOUT_SECS))
                     .expect("Failed to add date")
-                    .format(&Iso8601::DEFAULT)
-                    .expect("Failed to format date"),
+                    .to_rfc3339(),
+                // .format(&Iso8601::DEFAULT)
+                // .expect("Failed to format date"),
             )
         })
         .await

@@ -1,10 +1,13 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
+use std::{collections::HashSet, str::FromStr};
 
+use chrono::Utc;
 use database::DBHandler;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sea_orm::Database;
+use serenity::model::prelude::ChannelId;
 use serenity::{
     async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
@@ -18,13 +21,16 @@ use serenity::{
     model::prelude::{Activity, GatewayIntents, GuildId, Message, Ready, ResumedEvent, UserId},
     prelude::TypeMapKey,
 };
-use time::{OffsetDateTime, Weekday};
-use tokio::time::{interval, Duration};
+use time::OffsetDateTime;
+use tokio::task::JoinHandle;
+use tokio::time::Duration;
 
 mod commands;
 mod database;
 mod services;
 
+use crate::commands::general::{random_name, GUILD_DEFAULT_NAME};
+use crate::services::set_server_name;
 use crate::{
     commands::{
         cooltext::COOLTEXT_GROUP, emote::EMOTE_GROUP, general::GENERAL_GROUP,
@@ -231,62 +237,89 @@ fn get_time() -> OffsetDateTime {
     OffsetDateTime::now_utc()
 }
 
-#[allow(clippy::collapsible_if)]
 async fn schedule_loop(ctx: Context) {
-    let mut prev_time = get_time();
-    let mut interval = interval(Duration::from_secs(60));
-    let db = get_db_handler(&ctx).await;
-    let tasks = match db.get_all_tasks().await {
-        Ok(tasks) => tasks,
-        Err(e) => {
-            println!("Failed to get tasks: {e:?}. Cancelling task loop.");
-            return;
-        }
-    };
+    let mut running_tasks: HashMap<i32, JoinHandle<()>> = HashMap::new();
     loop {
-        let time = get_time();
-        let (_year, month, dom) = time.to_calendar_date();
-        let day = time.weekday();
-        let hour = time.hour();
-        let minute = time.minute();
-        if day != prev_time.weekday() {
-            // nightly_name_update(&ctx, &guilds, &day).await;
-        }
-        if hour != prev_time.hour() {
-            if day == Weekday::Monday && hour == 8 {
-                // weekly_lol_report(&ctx).await;
+        let db = get_db_handler(&ctx).await;
+        let tasks = match db.get_all_tasks().await {
+            Ok(tasks) => tasks,
+            Err(e) => {
+                println!("Failed to get tasks: {e:?}. Cancelling task loop.");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                continue;
             }
-            // for (m, d, _mes) in KORV_INGVAR_ANNIVERSARIES {
-            //     if month == *m && dom == *d && hour == 8 {
-            //         // TODO
-            //     }
-            // }
+        };
+        let mut db_task_ids: HashSet<i32> = HashSet::new();
+        for t in &tasks {
+            db_task_ids.insert(t.id);
         }
-        if minute != prev_time.minute() {}
-        prev_time = time;
-        interval.tick().await;
+        for rt in &running_tasks {
+            if !db_task_ids.contains(rt.0) {
+                rt.1.abort();
+            }
+        }
+        for t in tasks.into_iter() {
+            running_tasks.entry(t.id).or_insert_with(|| {
+                let ctx = ctx.clone();
+                let db = db.clone();
+                tokio::spawn(async move {
+                    println!("Starting task {}", t.id);
+                    let s = cron::Schedule::from_str(&t.cron).expect("Invalid cron string");
+                    for next in s.upcoming(Utc) {
+                        tokio::time::sleep(
+                            (next - Utc::now())
+                                .to_std()
+                                .expect("Failed time conversion"),
+                        )
+                        .await;
+                        match t.cmd.as_str() {
+                            "say" => {
+                                println!("Task {} say", t.id);
+                                let arg = match t.arg {
+                                    Some(ref s) => s,
+                                    None => break,
+                                };
+                                let _ = ChannelId(t.channel_id as u64).say(&ctx, arg).await;
+                            }
+                            "randomname" => {
+                                println!("Task {} randomname", t.id);
+                                let g = match ctx
+                                    .cache
+                                    .channel(t.channel_id as u64)
+                                    .and_then(|c| c.guild())
+                                    .and_then(|g| g.guild(&ctx))
+                                {
+                                    Some(g) => g,
+                                    None => break,
+                                };
+                                let _ = set_server_name(&ctx, g, None, &random_name()).await;
+                            }
+                            "defaultname" => {
+                                println!("Task {} defaultname", t.id);
+                                let g = match ctx
+                                    .cache
+                                    .channel(t.channel_id as u64)
+                                    .and_then(|c| c.guild())
+                                    .and_then(|g| g.guild(&ctx))
+                                {
+                                    Some(g) => g,
+                                    None => break,
+                                };
+                                let _ = set_server_name(&ctx, g, None, GUILD_DEFAULT_NAME).await;
+                            }
+                            _ => (),
+                        }
+                    }
+                    println!("Task {} ended. Removing.", t.id);
+                    if let Err(e) = db.delete_task(t.id).await {
+                        println!("WARN: Failed to remove task {}: {}", t.id, e);
+                    };
+                })
+            });
+        }
+        tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
-
-// async fn nightly_name_update(ctx: &Context, guilds: &Vec<GuildId>, day: &Weekday) {
-//     let members = match SetStore::new(GUILD_FILE) {
-//         Ok(m) => m,
-//         Err(_) => {
-//             println!("Failed to load name change members :(");
-//             return;
-//         }
-//     };
-//     for gid in guilds {
-//         if !members.containts(gid.0) {
-//             continue;
-//         };
-//         let name = match *day {
-//             Weekday::Tuesday => GUILD_DEFAULT_NAME.to_owned(),
-//             _ => random_name(),
-//         };
-//         let _ = set_server_name(ctx, gid.to_guild_cached(&ctx.cache).unwrap(), None, &name).await;
-//     }
-// }
 
 // async fn weekly_lol_report(ctx: &Context) {
 //     let m: WeeklyReportMembers = match JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE).read() {

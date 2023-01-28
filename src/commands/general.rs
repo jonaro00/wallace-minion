@@ -5,11 +5,11 @@ use serenity::{
         macros::{command, group},
         Args, CommandResult,
     },
-    model::prelude::{Guild, Message},
+    model::prelude::Message,
     utils::parse_username,
 };
 
-use crate::services::bonk_user;
+use crate::services::{bonk_user, set_server_name};
 
 // const GUILD_FILE: &str = "name_change_guilds.txt";
 
@@ -27,7 +27,7 @@ use crate::services::bonk_user;
 //     ),
 // ];
 
-const GUILD_DEFAULT_NAME: &str = "Tisdags Gaming Klubb";
+pub const GUILD_DEFAULT_NAME: &str = "Tisdags Gaming Klubb";
 
 const GUILD_NAME_SUBJECTS: &[&str] = &[
     "Tisdag",
@@ -146,18 +146,7 @@ const GUILD_NAME_OBJECTS: &[&str] = &[
 ];
 
 #[group]
-#[commands(
-    ping,
-    version,
-    power,
-    delete,
-    gamba,
-    bonk,
-    defaultname,
-    randomname,
-    // randomnameon,
-    // randomnameoff
-)]
+#[commands(ping, version, power, delete, gamba, bonk, defaultname, randomname)]
 struct General;
 
 #[command]
@@ -212,7 +201,7 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
 #[example("@Yxaria")]
 async fn gamba(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mut rng: StdRng = SeedableRng::from_entropy();
-    let uid = parse_username(args.current().unwrap()).ok_or_else(|| "Invalid user tag")?;
+    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
     if rng.gen_ratio(1, 5) {
         // Win
         bonk_user(ctx, msg, uid).await?;
@@ -231,7 +220,7 @@ async fn gamba(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[description("Bonk a user.")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     for arg in args.iter::<String>().map(|a| a.unwrap()) {
-        let uid = parse_username(&arg).ok_or_else(|| "Invalid user tag")?;
+        let uid = parse_username(&arg).ok_or("Invalid user tag")?;
         bonk_user(ctx, msg, uid).await?;
     }
     Ok(())
@@ -260,51 +249,10 @@ async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name()).await
 }
 
-fn random_name() -> String {
+pub fn random_name() -> String {
     let mut rng: StdRng = SeedableRng::from_entropy();
     let sub = GUILD_NAME_SUBJECTS[rng.gen_range(0..GUILD_NAME_SUBJECTS.len())];
     let s = sub.ends_with(|c| c == 's' || c == 'S');
     let obj = GUILD_NAME_OBJECTS[rng.gen_range(0..GUILD_NAME_OBJECTS.len())];
     format!("{sub}{} {obj} Klubb", if s { "" } else { "s" })
 }
-
-async fn set_server_name(
-    ctx: &Context,
-    mut guild: Guild,
-    reply_to: Option<&Message>,
-    name: &str,
-) -> CommandResult {
-    guild.edit(ctx, |g| g.name(name)).await?;
-    if let Some(msg) = reply_to {
-        msg.channel_id
-            .say(ctx, format!("Set server name to '{}'", name))
-            .await?;
-    }
-    Ok(())
-}
-
-// #[command]
-// #[only_in(guilds)]
-// #[required_permissions("ADMINISTRATOR")]
-// #[description("Turn on random server name every day.")]
-// async fn randomnameon(ctx: &Context, msg: &Message) -> CommandResult {
-//     let mut s = SetStore::new(GUILD_FILE)?;
-//     s.insert(msg.guild(ctx).unwrap().id.0)?;
-//     msg.channel_id
-//         .say(ctx, "Added server to receive random names every night")
-//         .await?;
-//     Ok(())
-// }
-
-// #[command]
-// #[only_in(guilds)]
-// #[required_permissions("ADMINISTRATOR")]
-// #[description("Turn on random server name every day.")]
-// async fn randomnameoff(ctx: &Context, msg: &Message) -> CommandResult {
-//     let mut s = SetStore::new(GUILD_FILE)?;
-//     s.remove(msg.guild(ctx).unwrap().id.0)?;
-//     msg.channel_id
-//         .say(ctx, "Removed server to receive random names every night")
-//         .await?;
-//     Ok(())
-// }

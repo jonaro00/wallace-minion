@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serenity::{
     client::Context,
     framework::standard::{
@@ -23,8 +25,8 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
             ctx,
             db.get_all_tasks_in_channel(msg.channel_id.0)
                 .await
-                .and_then(|tasks| {
-                    Ok(tasks
+                .map(|tasks| {
+                    tasks
                         .iter()
                         .map(|t| {
                             format!(
@@ -32,10 +34,10 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
                                 t.id,
                                 t.cron,
                                 t.cmd,
-                                t.arg.clone().unwrap_or("".into())
+                                t.arg.clone().unwrap_or_else(|| "".into())
                             )
                         })
-                        .collect())
+                        .collect()
                 })
                 .unwrap_or_else(|e| e),
         )
@@ -55,11 +57,11 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     args.advance();
     let arg = args.current().map(|s| s.to_owned());
 
-    if crontab::Crontab::parse(&cron).is_err() {
+    if cron::Schedule::from_str(&cron).is_err() {
         let _ = msg.channel_id.say(ctx, "Invalid cron format").await;
         return Ok(());
     }
-    let cmds = ["randomname", "say"];
+    let cmds = ["defaultname", "randomname", "say"];
     if !cmds.contains(&cmd.as_str()) {
         let _ = msg.channel_id.say(ctx, "Invalid command to schedule").await;
         return Ok(());
