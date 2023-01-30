@@ -9,7 +9,7 @@ use serenity::{
     model::prelude::Message,
 };
 
-use crate::get_db_handler;
+use crate::discord::get_db_handler;
 
 #[group]
 #[commands(tasks)]
@@ -21,7 +21,7 @@ struct Scheduling;
 async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let s = format!(
-        "**Tasks in <#{}>:**\nID: (`cron schedule`) command \"argument\"\n---------------------------{}",
+        "**Tasks in <#{}>:**\nID: (`cron schedule`) command \"argument\"\n---------------------------\n{}",
         msg.channel_id.0,
         db.get_all_tasks_in_channel(msg.channel_id.0)
             .await

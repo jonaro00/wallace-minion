@@ -166,15 +166,19 @@ impl DBHandler {
             .ok_or("No user")?
             .1
             .first()
-            .ok_or("No accounts in this user")?
+            .ok_or("No account for this user")?
             .clone()
             .into();
-        b.balance = Set(b
+        let new_bal = b
             .balance
             .take()
             .unwrap()
             .checked_add(amount)
-            .ok_or("overflow")?);
+            .ok_or("overflow")?;
+        if new_bal < 0 {
+            return Err("Account balance too low");
+        }
+        b.balance = Set(new_bal);
         let r = b
             .update(&self.db)
             .await
@@ -182,6 +186,64 @@ impl DBHandler {
             .balance;
         trx.commit().await.map_err(|_| "Database call failed")?;
         Ok(r)
+    }
+    pub async fn transfer_bank_account_balance(
+        &self,
+        from_user_id: u64,
+        to_user_id: u64,
+        amount: i64,
+    ) -> Result<(i64, i64), &str> {
+        if amount < 1 {
+            return Err("Too small transfer amount");
+        }
+        let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
+        let mut b1: bank_account::ActiveModel = User::find_by_id(from_user_id as i64)
+            .find_with_related(BankAccount)
+            .all(&self.db)
+            .await
+            .map_err(|_| "Database call failed")?
+            .first()
+            .ok_or("No user")?
+            .1
+            .first()
+            .ok_or("No account for this user")?
+            .clone()
+            .into();
+        let mut b2: bank_account::ActiveModel = User::find_by_id(to_user_id as i64)
+            .find_with_related(BankAccount)
+            .all(&self.db)
+            .await
+            .map_err(|_| "Database call failed")?
+            .first()
+            .ok_or("No user")?
+            .1
+            .first()
+            .ok_or("No account for this user")?
+            .clone()
+            .into();
+        let new_bal_b1 = b1
+            .balance
+            .take()
+            .unwrap()
+            .checked_add(-amount)
+            .ok_or("overflow")?;
+        if new_bal_b1 < 0 {
+            return Err("Account balance too low");
+        }
+        b1.balance = Set(new_bal_b1);
+        b2.balance = Set(b2.balance.take().unwrap().checked_add(amount).ok_or("overflow")?);
+        let r1 = b1
+            .update(&self.db)
+            .await
+            .map_err(|_| "Failed to update balance")?
+            .balance;
+        let r2 = b2
+            .update(&self.db)
+            .await
+            .map_err(|_| "Failed to update balance")?
+            .balance;
+        trx.commit().await.map_err(|_| "Database call failed")?;
+        Ok((r1, r2))
     }
     pub async fn create_task(
         &self,

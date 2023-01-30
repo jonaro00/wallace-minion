@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.2.0"
+version = "0.2.0-beta"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -21,7 +21,7 @@ serenity = { version = "0.11", default-features = false, features = [
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 rand = "0.8"
 dotenvy = "0.15"
-time = "0"
+time = "0.3"
 serde = "1"
 serde_json = "1"
 reqwest = "0.11" # reqwest: sudo apt-get install pkg-config # https://docs.rs/openssl/latest/openssl/index.html#automatic
@@ -32,3 +32,5 @@ sea-orm = { version = "0.10", default-features = false, features = [
 ] }
 cron = "0.12"
 chrono = { version = "0.4", default-features = false }
+shuttle-secrets = "0.9.0"
+shuttle-service = { version = "0.9.0", features = ["bot-serenity"] }

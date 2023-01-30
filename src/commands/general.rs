@@ -11,7 +11,7 @@ use serenity::{
 
 use crate::{
     services::{bonk_user, set_server_name},
-    wallace_version,
+    discord::wallace_version,
 };
 
 // const GUILD_FILE: &str = "name_change_guilds.txt";

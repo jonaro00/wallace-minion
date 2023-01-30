@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::{collections::HashSet, str::FromStr};
 
 use chrono::Utc;
-use database::DBHandler;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sea_orm::Database;
 use serenity::model::prelude::ChannelId;
@@ -25,18 +24,16 @@ use time::OffsetDateTime;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
-mod commands;
-mod database;
-mod services;
-
-use crate::commands::general::{random_name, GUILD_DEFAULT_NAME};
-use crate::services::set_server_name;
 use crate::{
     commands::{
-        bank::BANK_GROUP, cooltext::COOLTEXT_GROUP, emote::EMOTE_GROUP, general::GENERAL_GROUP,
+        bank::BANK_GROUP,
+        cooltext::COOLTEXT_GROUP,
+        emote::EMOTE_GROUP,
+        general::{random_name, GENERAL_GROUP, GUILD_DEFAULT_NAME},
         scheduling::SCHEDULING_GROUP,
     },
-    services::riot_api::RiotAPIClients,
+    database::DBHandler,
+    services::{riot_api::RiotAPIClients, set_server_name},
 };
 
 pub fn wallace_version() -> String {
@@ -51,19 +48,12 @@ pub fn wallace_version() -> String {
     )
 }
 
-#[tokio::main]
-async fn main() {
-    dotenvy::dotenv().ok();
-
-    let discord_token =
-        env::var("DISCORD_TOKEN").expect("Discord token missing! (env variable `DISCORD_TOKEN`)");
-    let riot_token_lol = env::var("RIOT_TOKEN_LOL")
-        .expect("Riot token for LoL missing! (env variable `RIOT_TOKEN_LOL`)");
-    let riot_token_tft = env::var("RIOT_TOKEN_TFT")
-        .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
-    let db_url =
-        env::var("DATABASE_URL").expect("URL for database missing! (env variable `DATABASE_URL`)");
-
+pub async fn build_bot(
+    discord_token: String,
+    riot_token_lol: String,
+    riot_token_tft: String,
+    db_url: String,
+) -> DiscordClient {
     let http = Http::new(&discord_token);
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
@@ -94,7 +84,7 @@ async fn main() {
         // .group(&LOL_GROUP)
         // .group(&TFT_GROUP)
         .help(&HELP_COMMAND);
-    let mut client = DiscordClient::builder(
+    let client = DiscordClient::builder(
         discord_token,
         GatewayIntents::non_privileged()
             | GatewayIntents::MESSAGE_CONTENT
@@ -122,10 +112,7 @@ async fn main() {
         data.insert::<WallaceDB>(Arc::new(dbh));
     } // Release lock
 
-    // start listening for events by starting a single shard
-    if let Err(why) = client.start().await {
-        println!("An error occurred while running the client: {why:?}");
-    }
+    client
 }
 
 struct WallaceRiot;
@@ -142,9 +129,9 @@ async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
 
 struct WallaceDB;
 impl TypeMapKey for WallaceDB {
-    type Value = Arc<database::DBHandler>;
+    type Value = Arc<DBHandler>;
 }
-async fn get_db_handler(ctx: &Context) -> Arc<DBHandler> {
+pub async fn get_db_handler(ctx: &Context) -> Arc<DBHandler> {
     let data_read = ctx.data.read().await;
     data_read
         .get::<WallaceDB>()

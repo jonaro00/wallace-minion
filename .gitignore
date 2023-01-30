@@ -1,4 +1,3 @@
 /target
 .env
-name_change_guilds.txt
-weekly_report_members.json
+Secrets.toml
