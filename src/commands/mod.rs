@@ -1,3 +1,4 @@
+pub mod bank;
 pub mod cooltext;
 pub mod emote;
 pub mod general;

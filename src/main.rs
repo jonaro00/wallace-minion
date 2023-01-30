@@ -33,11 +33,23 @@ use crate::commands::general::{random_name, GUILD_DEFAULT_NAME};
 use crate::services::set_server_name;
 use crate::{
     commands::{
-        cooltext::COOLTEXT_GROUP, emote::EMOTE_GROUP, general::GENERAL_GROUP,
+        bank::BANK_GROUP, cooltext::COOLTEXT_GROUP, emote::EMOTE_GROUP, general::GENERAL_GROUP,
         scheduling::SCHEDULING_GROUP,
     },
     services::riot_api::RiotAPIClients,
 };
+
+pub fn wallace_version() -> String {
+    format!(
+        "v{}{}",
+        env!("CARGO_PKG_VERSION"),
+        if cfg!(debug_assertions) {
+            " (development)"
+        } else {
+            ""
+        },
+    )
+}
 
 #[tokio::main]
 async fn main() {
@@ -76,6 +88,7 @@ async fn main() {
         .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
         .group(&EMOTE_GROUP)
+        .group(&BANK_GROUP)
         .group(&COOLTEXT_GROUP)
         .group(&SCHEDULING_GROUP)
         // .group(&LOL_GROUP)
@@ -146,16 +159,19 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data: Ready) {
         println!("{} is connected!", data.user.name);
         let activity = if cfg!(debug_assertions) {
-            Activity::playing("on a construction site 🔨🙂")
+            Activity::playing(&format!(
+                "on a construction site 🔨🙂 | {}",
+                wallace_version()
+            ))
         } else {
-            Activity::watching("you 🔨🙂 | !help")
+            Activity::watching(&format!("you 🔨🙂 | !help | {}", wallace_version()))
         };
         let _ = ctx.set_activity(activity).await;
     }
 
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
         println!("Loaded {} guilds.", guilds.len());
-        tokio::spawn(schedule_loop(ctx)).await.unwrap();
+        tokio::spawn(schedule_loop(ctx));
     }
 
     async fn resume(&self, _ctx: Context, _r: ResumedEvent) {
@@ -221,6 +237,8 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
 }
 
 #[help]
+#[embed_success_colour("#389d58")]
+#[max_levenshtein_distance(2)]
 async fn help_command(
     context: &Context,
     msg: &Message,
@@ -237,10 +255,35 @@ fn get_time() -> OffsetDateTime {
     OffsetDateTime::now_utc()
 }
 
+const WEEKLY_PAYOUT: i64 = 10;
+async fn built_in_tasks(ctx: Context) {
+    let db = get_db_handler(&ctx).await;
+    // Weekly payout
+    tokio::spawn(async move {
+        let s = cron::Schedule::from_str("0 0 8 * * Mon *").unwrap();
+        for next in s.upcoming(Utc) {
+            tokio::time::sleep(
+                (next - Utc::now())
+                    .to_std()
+                    .expect("Failed time conversion"),
+            )
+            .await;
+            println!("Time for veckopeng.");
+            for u in db.get_all_users().await.expect("Could not fetch users") {
+                let _ = db
+                    .modify_bank_account_balance(u.id as u64, WEEKLY_PAYOUT)
+                    .await;
+            }
+            println!("Veckopeng has been dealt.");
+        }
+    });
+}
+
 async fn schedule_loop(ctx: Context) {
+    built_in_tasks(ctx.clone()).await;
     let mut running_tasks: HashMap<i32, JoinHandle<()>> = HashMap::new();
+    let db = get_db_handler(&ctx).await;
     loop {
-        let db = get_db_handler(&ctx).await;
         let tasks = match db.get_all_tasks().await {
             Ok(tasks) => tasks,
             Err(e) => {
@@ -263,7 +306,6 @@ async fn schedule_loop(ctx: Context) {
                 let ctx = ctx.clone();
                 let db = db.clone();
                 tokio::spawn(async move {
-                    println!("Starting task {}", t.id);
                     let s = cron::Schedule::from_str(&t.cron).expect("Invalid cron string");
                     for next in s.upcoming(Utc) {
                         tokio::time::sleep(
@@ -274,7 +316,6 @@ async fn schedule_loop(ctx: Context) {
                         .await;
                         match t.cmd.as_str() {
                             "say" => {
-                                println!("Task {} say", t.id);
                                 let arg = match t.arg {
                                     Some(ref s) => s,
                                     None => break,
@@ -282,7 +323,6 @@ async fn schedule_loop(ctx: Context) {
                                 let _ = ChannelId(t.channel_id as u64).say(&ctx, arg).await;
                             }
                             "randomname" => {
-                                println!("Task {} randomname", t.id);
                                 let g = match ctx
                                     .cache
                                     .channel(t.channel_id as u64)
@@ -295,7 +335,6 @@ async fn schedule_loop(ctx: Context) {
                                 let _ = set_server_name(&ctx, g, None, &random_name()).await;
                             }
                             "defaultname" => {
-                                println!("Task {} defaultname", t.id);
                                 let g = match ctx
                                     .cache
                                     .channel(t.channel_id as u64)
@@ -310,7 +349,6 @@ async fn schedule_loop(ctx: Context) {
                             _ => (),
                         }
                     }
-                    println!("Task {} ended. Removing.", t.id);
                     if let Err(e) = db.delete_task(t.id).await {
                         println!("WARN: Failed to remove task {}: {}", t.id, e);
                     };

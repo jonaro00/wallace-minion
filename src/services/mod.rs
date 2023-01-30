@@ -27,7 +27,6 @@ pub async fn set_server_name(
     Ok(())
 }
 
-const TIMEOUT_SECS: i64 = 60;
 const BONK_EMOTES: &[&str] = &[
     "https://cdn.7tv.app/emote/631b61a98cf0978e2955b04f/2x.gif",
     "https://cdn.7tv.app/emote/60d174a626215e098873e43e/2x.gif",
@@ -41,18 +40,21 @@ const BONK_EMOTES: &[&str] = &[
     "https://cdn.7tv.app/emote/62ae151c260bc8642e64ec36/2x.gif",
     "https://cdn.7tv.app/emote/603eacea115b55000d7282dc/2x.gif",
     "https://cdn.7tv.app/emote/62734c1ade98b688d09661d6/2x.gif",
+    "https://cdn.7tv.app/emote/61e0be4f4f44b95f34661a89/2x.gif",
+    "https://cdn.7tv.app/emote/60ee6dbf77c3ca347fdfea8b/2x.gif",
+    "https://cdn.7tv.app/emote/6116999a7327a61fe25e580c/2x.gif",
+    "https://cdn.7tv.app/emote/61bcc6e25804e220aa6adc77/2x.gif",
+    "https://cdn.7tv.app/emote/62734c1ade98b688d09661d6/2x.gif",
 ];
-pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
+pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) -> CommandResult {
     let gid = msg.guild_id.ok_or("Failed to get guild")?;
     if let Err(e) = gid
         .edit_member(ctx, UserId(uid), |m| {
             m.disable_communication_until(
                 Timestamp::now()
-                    .checked_add_signed(Duration::seconds(TIMEOUT_SECS))
+                    .checked_add_signed(Duration::seconds(duration as i64))
                     .expect("Failed to add date")
                     .to_rfc3339(),
-                // .format(&Iso8601::DEFAULT)
-                // .expect("Failed to format date"),
             )
         })
         .await
@@ -79,7 +81,7 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult 
                 "{}🔨🙂 Timed out <@{}> for {} seconds.",
                 to_cool_text("BONK!", Font::BoldScript),
                 uid,
-                TIMEOUT_SECS,
+                duration,
             ),
         )
         .await;

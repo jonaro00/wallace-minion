@@ -2,5 +2,9 @@
 
 pub mod prelude;
 
+pub mod bank_account;
 pub mod channel;
+pub mod guild;
+pub mod lol_account;
 pub mod task;
+pub mod user;
