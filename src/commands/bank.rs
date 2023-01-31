@@ -105,7 +105,7 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let amount: i64 = match a.parse() {
         Ok(n) => {
             args.advance();
-            1.max(n)
+            n
         }
         Err(_) => 1,
     };
@@ -114,10 +114,12 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let target_uid = parse_username(a).ok_or("Invalid user tag")?;
 
     let uid = msg.author.id.0;
-    if let Err(e) = db.modify_bank_account_balance(uid, -amount).await {
+    let trx = db.begin().await?;
+    if let Err(e) = db.subtract_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
+    db.commit(trx).await?;
 
     // m * 35 * a^(1/3)-11 bounded to [1, 100]
     let chance = 100.min(1.max((modifier * 35.0 * (amount as f32).powf(1.0 / 3.0) - 11.0) as u32));
@@ -151,23 +153,34 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[usage("<amount>")]
 #[example("1")]
 async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let amount: i64 = 1.max(
-        args.current()
-            .unwrap()
-            .parse()
-            .map_err(|_| "Invalid amount")?,
-    );
+    let amount: i64 = args
+        .current()
+        .unwrap()
+        .parse()
+        .map_err(|_| "Invalid amount")?;
     let uid = msg.author.id.0;
     let db = get_db_handler(ctx).await;
     let mut rng: StdRng = SeedableRng::from_entropy();
-    let (diff, reply) = if rng.gen_ratio(1, 2) {
+    let trx = db.begin().await?;
+    if let Err(e) = db.has_bank_account_balance(uid, amount).await {
+        let _ = msg.channel_id.say(ctx, e).await;
+        return Ok(());
+    }
+    let (res, reply) = if rng.gen_ratio(1, 2) {
         // Win
-        (amount, format!("🟩 Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"))
+        (
+            db.add_bank_account_balance(uid, amount).await,
+            format!("🟩 Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"),
+        )
     } else {
         // Loss
-        (-amount, format!("🟥 Lost {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"))
+        (
+            db.subtract_bank_account_balance(uid, amount).await,
+            format!("🟥 Lost {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"),
+        )
     };
-    if let Err(e) = db.modify_bank_account_balance(uid, diff).await {
+    db.commit(trx).await?;
+    if let Err(e) = res {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
@@ -195,7 +208,7 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let a = args.current().unwrap();
-    let amount: i64 = 1.max(a.parse().map_err(|_| "Invalid amount")?);
+    let amount: i64 = a.parse().map_err(|_| "Invalid amount")?;
     args.advance();
     let a = args.current().unwrap();
     let target_uid = parse_username(a).ok_or("Invalid user tag")?;
@@ -207,7 +220,13 @@ async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
-    let tn = msg.guild_id.unwrap().member(ctx, target_uid).await.map(|m| m.nick.unwrap_or("?".into())).unwrap_or_else(|_| "?".into());
+    let tn = msg
+        .guild_id
+        .unwrap()
+        .member(ctx, target_uid)
+        .await
+        .map(|m| m.nick.unwrap_or("?".into()))
+        .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id
         .send_message(ctx, |m| {
@@ -231,12 +250,14 @@ async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn mint(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let a = args.current().unwrap();
-    let amount: i64 = 1.max(a.parse().map_err(|_| "Invalid amount")?);
+    let amount: i64 = a.parse().map_err(|_| "Invalid amount")?;
     let uid = msg.author.id.0;
-    if let Err(e) = db.modify_bank_account_balance(uid, amount).await {
+    let trx = db.begin().await?;
+    if let Err(e) = db.add_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
+    db.commit(trx).await?;
     let _ = msg.react(ctx, '🫡').await;
     Ok(())
 }

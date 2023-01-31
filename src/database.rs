@@ -1,6 +1,7 @@
 use entity::prelude::*;
 use entity::*;
 use migration::OnConflict;
+use sea_orm::DatabaseTransaction;
 #[allow(unused_imports)]
 use sea_orm::{entity::*, query::*, DatabaseConnection};
 
@@ -9,6 +10,18 @@ pub struct DBHandler {
 }
 
 impl DBHandler {
+    pub async fn begin(&self) -> Result<DatabaseTransaction, &str> {
+        self.db.begin().await.map_err(|_| "Database call failed")
+    }
+    pub async fn commit(&self, trx: DatabaseTransaction) -> Result<(), &str> {
+        trx.commit().await.map_err(|_| "Database call failed")
+    }
+    fn positive(&self, amount: i64) -> Result<(), &str> {
+        if !amount.is_positive() {
+            return Err("Non-positive amount");
+        }
+        Ok(())
+    }
     pub async fn create_guild(&self, id: u64) -> Result<guild::Model, &str> {
         Guild::insert(guild::ActiveModel { id: Set(id as i64) })
             .on_conflict(
@@ -104,7 +117,23 @@ impl DBHandler {
             .clone();
         Ok(v)
     }
+    async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Model, &str> {
+        Ok(User::find_by_id(user_id as i64)
+            .find_with_related(BankAccount)
+            .all(&self.db)
+            .await
+            .map_err(|_| "Database call failed")?
+            .first()
+            .ok_or("User not registered in Wallace")?
+            .1
+            .first()
+            .ok_or("User has no account")?
+            .clone())
+    }
     pub async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Model, &str> {
+        if self.get_bank_account(user_id).await.is_ok() {
+            return Err("Account already open");
+        }
         let _ = self.create_user(user_id).await;
         let r = BankAccount::insert(bank_account::ActiveModel {
             id: NotSet,
@@ -138,53 +167,56 @@ impl DBHandler {
         Ok(())
     }
     pub async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64, &str> {
-        let b = User::find_by_id(user_id as i64)
-            .find_with_related(BankAccount)
-            .all(&self.db)
-            .await
-            .map_err(|_| "Database call failed")?
-            .first()
-            .ok_or("No user")?
-            .1
-            .first()
-            .ok_or("No accounts in this user")?
-            .clone();
-        Ok(b.balance)
+        let a = self.get_bank_account(user_id).await?;
+        Ok(a.balance)
     }
-    pub async fn modify_bank_account_balance(
-        &self,
-        user_id: u64,
-        amount: i64,
-    ) -> Result<i64, &str> {
-        let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
-        let mut b: bank_account::ActiveModel = User::find_by_id(user_id as i64)
-            .find_with_related(BankAccount)
-            .all(&self.db)
-            .await
-            .map_err(|_| "Database call failed")?
-            .first()
-            .ok_or("No user")?
-            .1
-            .first()
-            .ok_or("No account for this user")?
-            .clone()
-            .into();
-        let new_bal = b
+    pub async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<(), &str> {
+        self.positive(amount)?;
+        if amount > self.get_bank_account(user_id).await?.balance {
+            return Err("Account balance too low");
+        }
+        Ok(())
+    }
+    pub async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64, &str> {
+        // let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
+        self.positive(amount)?;
+        let mut a: bank_account::ActiveModel = self.get_bank_account(user_id).await?.into();
+        let new_bal = a
             .balance
             .take()
             .unwrap()
             .checked_add(amount)
             .ok_or("overflow")?;
-        if new_bal < 0 {
-            return Err("Account balance too low");
-        }
-        b.balance = Set(new_bal);
-        let r = b
+        a.balance = Set(new_bal);
+        let r = a
             .update(&self.db)
             .await
             .map_err(|_| "Failed to update balance")?
             .balance;
-        trx.commit().await.map_err(|_| "Database call failed")?;
+        // trx.commit().await.map_err(|_| "Database call failed")?;
+        Ok(r)
+    }
+    pub async fn subtract_bank_account_balance(
+        &self,
+        user_id: u64,
+        amount: i64,
+    ) -> Result<i64, &str> {
+        // let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
+        let mut a: bank_account::ActiveModel = self.get_bank_account(user_id).await?.into();
+        let _ = self.has_bank_account_balance(user_id, amount).await?;
+        let new_bal = a
+            .balance
+            .take()
+            .unwrap()
+            .checked_sub(amount)
+            .ok_or("overflow")?;
+        a.balance = Set(new_bal);
+        let r = a
+            .update(&self.db)
+            .await
+            .map_err(|_| "Failed to update balance")?
+            .balance;
+        // trx.commit().await.map_err(|_| "Database call failed")?;
         Ok(r)
     }
     pub async fn transfer_bank_account_balance(
@@ -193,64 +225,15 @@ impl DBHandler {
         to_user_id: u64,
         amount: i64,
     ) -> Result<(i64, i64), &str> {
-        if amount < 1 {
-            return Err("Too small transfer amount");
-        }
         if from_user_id == to_user_id {
             return Err("Can't transfer to self");
         }
-        let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
-        let mut b1: bank_account::ActiveModel = User::find_by_id(from_user_id as i64)
-            .find_with_related(BankAccount)
-            .all(&self.db)
-            .await
-            .map_err(|_| "Database call failed")?
-            .first()
-            .ok_or("No user")?
-            .1
-            .first()
-            .ok_or("No account for this user")?
-            .clone()
-            .into();
-        let mut b2: bank_account::ActiveModel = User::find_by_id(to_user_id as i64)
-            .find_with_related(BankAccount)
-            .all(&self.db)
-            .await
-            .map_err(|_| "Database call failed")?
-            .first()
-            .ok_or("No user")?
-            .1
-            .first()
-            .ok_or("No account for this user")?
-            .clone()
-            .into();
-        let new_bal_b1 = b1
-            .balance
-            .take()
-            .unwrap()
-            .checked_add(-amount)
-            .ok_or("overflow")?;
-        if new_bal_b1 < 0 {
-            return Err("Account balance too low");
-        }
-        b1.balance = Set(new_bal_b1);
-        b2.balance = Set(b2
-            .balance
-            .take()
-            .unwrap()
-            .checked_add(amount)
-            .ok_or("overflow")?);
-        let r1 = b1
-            .update(&self.db)
-            .await
-            .map_err(|_| "Failed to update balance")?
-            .balance;
-        let r2 = b2
-            .update(&self.db)
-            .await
-            .map_err(|_| "Failed to update balance")?
-            .balance;
-        trx.commit().await.map_err(|_| "Database call failed")?;
+        let trx = self.begin().await?;
+        let r1 = self
+            .subtract_bank_account_balance(from_user_id, amount)
+            .await?;
+        let r2 = self.add_bank_account_balance(to_user_id, amount).await?;
+        self.commit(trx).await?;
         Ok((r1, r2))
     }
     pub async fn create_task(

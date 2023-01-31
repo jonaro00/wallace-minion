@@ -256,11 +256,13 @@ async fn built_in_tasks(ctx: Context) {
             )
             .await;
             println!("Time for veckopeng.");
+            // let trx = db.begin().await?;
             for u in db.get_all_users().await.expect("Could not fetch users") {
                 let _ = db
-                    .modify_bank_account_balance(u.id as u64, WEEKLY_PAYOUT)
+                    .add_bank_account_balance(u.id as u64, WEEKLY_PAYOUT)
                     .await;
             }
+            // db.commit(trx).await?;
             println!("Veckopeng has been dealt.");
         }
     });
