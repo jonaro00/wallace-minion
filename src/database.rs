@@ -196,6 +196,9 @@ impl DBHandler {
         if amount < 1 {
             return Err("Too small transfer amount");
         }
+        if from_user_id == to_user_id {
+            return Err("Can't transfer to self");
+        }
         let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
         let mut b1: bank_account::ActiveModel = User::find_by_id(from_user_id as i64)
             .find_with_related(BankAccount)
@@ -231,7 +234,12 @@ impl DBHandler {
             return Err("Account balance too low");
         }
         b1.balance = Set(new_bal_b1);
-        b2.balance = Set(b2.balance.take().unwrap().checked_add(amount).ok_or("overflow")?);
+        b2.balance = Set(b2
+            .balance
+            .take()
+            .unwrap()
+            .checked_add(amount)
+            .ok_or("overflow")?);
         let r1 = b1
             .update(&self.db)
             .await
