@@ -21,8 +21,7 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use time::OffsetDateTime;
-use tokio::task::JoinHandle;
-use tokio::time::Duration;
+use tokio::{task::JoinHandle, time::Duration};
 
 use crate::{
     commands::{
@@ -74,6 +73,7 @@ pub async fn build_bot(
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!").owners(owners))
         .unrecognised_command(unknown_command_hook)
+        .before(before_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
@@ -184,6 +184,39 @@ async fn unknown_command_hook(ctx: &Context, msg: &Message, unknown_command_name
             format!("Me not understand '{unknown_command_name}' 🤔"),
         )
         .await;
+}
+
+#[hook]
+async fn before_hook(ctx: &Context, msg: &Message, _cmd_name: &str) -> bool {
+    if !cfg!(debug_assertions) {
+        return true;
+    }
+    let ch_name = msg.channel_id.name(ctx).await;
+    let pat = "test";
+    match ch_name {
+        Some(n) => {
+            if !n.contains(pat) {
+                println!(
+                    "[DEV] Ignoring command in {}, name does not contain '{}'.",
+                    n, pat
+                );
+                false
+            } else {
+                // guild channel with 'test' in the name
+                true
+            }
+        }
+        None => match msg.channel_id.to_channel(ctx).await.map(|c| c.private()) {
+            Ok(Some(_)) => true, // DM
+            _ => {
+                println!(
+                    "[DEV] Ignoring command in {}, could not read channel name.",
+                    msg.channel_id.0
+                );
+                false
+            }
+        },
+    }
 }
 
 #[hook]

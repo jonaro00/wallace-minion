@@ -37,11 +37,30 @@ impl DBHandler {
         User::insert(user::ActiveModel {
             id: Set(id as i64),
             bank_account_id: Set(None),
+            ..Default::default()
         })
         .on_conflict(OnConflict::column(user::Column::Id).do_nothing().to_owned())
         .exec_with_returning(&self.db)
         .await
         .map_err(|_| "Failed to create user")
+    }
+    pub async fn get_user_mature(&self, id: u64) -> Result<bool, &str> {
+        Ok(User::find_by_id(id as i64)
+            .one(&self.db)
+            .await
+            .map_err(|_| "Database call failed")?
+            .ok_or("User not registered in Wallace")?
+            .mature)
+    }
+    pub async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Model, &str> {
+        User::update(user::ActiveModel {
+            id: Set(id as i64),
+            mature: Set(mature),
+            bank_account_id: NotSet,
+        })
+        .exec(&self.db)
+        .await
+        .map_err(|_| "Failed to update user")
     }
     pub async fn get_all_users(&self) -> Result<Vec<user::Model>, &str> {
         User::find()
@@ -149,6 +168,7 @@ impl DBHandler {
         .map_err(|_| "Failed to create bank_account")?;
         User::update(user::ActiveModel {
             id: Set(user_id as i64),
+            mature: NotSet,
             bank_account_id: Set(Some(r.id)),
         })
         .exec(&self.db)
@@ -159,6 +179,7 @@ impl DBHandler {
     pub async fn delete_bank_account(&self, user_id: u64) -> Result<(), &str> {
         User::update(user::ActiveModel {
             id: Set(user_id as i64),
+            mature: NotSet,
             bank_account_id: Set(None),
         })
         .exec(&self.db)
@@ -178,7 +199,6 @@ impl DBHandler {
         Ok(())
     }
     pub async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64, &str> {
-        // let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
         self.positive(amount)?;
         let mut a: bank_account::ActiveModel = self.get_bank_account(user_id).await?.into();
         let new_bal = a
@@ -193,7 +213,6 @@ impl DBHandler {
             .await
             .map_err(|_| "Failed to update balance")?
             .balance;
-        // trx.commit().await.map_err(|_| "Database call failed")?;
         Ok(r)
     }
     pub async fn subtract_bank_account_balance(
@@ -201,7 +220,6 @@ impl DBHandler {
         user_id: u64,
         amount: i64,
     ) -> Result<i64, &str> {
-        // let trx = self.db.begin().await.map_err(|_| "Database call failed")?;
         let mut a: bank_account::ActiveModel = self.get_bank_account(user_id).await?.into();
         let _ = self.has_bank_account_balance(user_id, amount).await?;
         let new_bal = a
@@ -216,7 +234,6 @@ impl DBHandler {
             .await
             .map_err(|_| "Failed to update balance")?
             .balance;
-        // trx.commit().await.map_err(|_| "Database call failed")?;
         Ok(r)
     }
     pub async fn transfer_bank_account_balance(

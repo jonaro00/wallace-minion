@@ -14,7 +14,7 @@ use serenity::{
 use crate::{discord::get_db_handler, services::bonk_user};
 
 #[group]
-#[commands(account, gamba, coinflip, give, mint)]
+#[commands(account, gamba, coinflip, give, mint, set_mature)]
 struct Bank;
 
 #[command]
@@ -160,6 +160,10 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .map_err(|_| "Invalid amount")?;
     let uid = msg.author.id.0;
     let db = get_db_handler(ctx).await;
+    if db.get_user_mature(uid).await? == false {
+        let _ = msg.channel_id.say(ctx, "User must be marked as mature ☝🤓").await;
+        return Ok(());
+    }
     let mut rng: StdRng = SeedableRng::from_entropy();
     let trx = db.begin().await?;
     if let Err(e) = db.has_bank_account_balance(uid, amount).await {
@@ -254,6 +258,28 @@ async fn mint(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let uid = msg.author.id.0;
     let trx = db.begin().await?;
     if let Err(e) = db.add_bank_account_balance(uid, amount).await {
+        let _ = msg.channel_id.say(ctx, e).await;
+        return Ok(());
+    }
+    db.commit(trx).await?;
+    let _ = msg.react(ctx, '🫡').await;
+    Ok(())
+}
+
+#[command]
+#[owners_only]
+#[num_args(2)]
+#[usage("<user> true|false")]
+#[example("@Yxaria true")]
+async fn set_mature(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    let a = args.current().unwrap();
+    let target_uid = parse_username(a).ok_or("Invalid user tag")?;
+    args.advance();
+    let a = args.current().unwrap();
+    let mature: bool = a.parse().map_err(|_| "Invalid bool")?;
+    let trx = db.begin().await?;
+    if let Err(e) = db.set_user_mature(target_uid, mature).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
