@@ -20,8 +20,9 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     let riot_token_tft = secret_store
         .get("RIOT_TOKEN_TFT")
         .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
+    let db_key = if cfg!(debug_assertions) { "DATABASE_URL" } else { "DATABASE_URL_PRODUCTION" };
     let db_url = secret_store
-        .get("DATABASE_URL")
+        .get(db_key)
         .expect("URL for database missing! (env variable `DATABASE_URL`)");
 
     let client = build_bot(discord_token, riot_token_lol, riot_token_tft, db_url).await;
