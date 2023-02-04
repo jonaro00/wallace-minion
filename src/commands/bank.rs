@@ -18,7 +18,7 @@ use crate::{discord::get_db_handler, services::bonk_user};
 struct Bank;
 
 #[command]
-#[sub_commands(open, close)]
+#[sub_commands(open, close, top)]
 #[description("Show your account balance.")]
 async fn account(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
@@ -71,6 +71,51 @@ async fn close(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
     let _ = msg.channel_id.say(ctx, "Account closed").await;
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[description("See the top 𝓚𝓪𝓹𝓼𝔂𝓵 holders in this guild.")]
+async fn top(ctx: &Context, msg: &Message) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    let ch = msg.channel_id;
+    let mem = ch
+        .to_channel_cached(ctx)
+        .ok_or("failed to get channel")?
+        .guild()
+        .ok_or("failed to get guild")?
+        .members(ctx)
+        .await?;
+    let mut v = vec![];
+    for m in mem {
+        match db.get_bank_account_balance(m.user.id.0).await {
+            Ok(b) => v.push((m, b)),
+            _ => (),
+        }
+    }
+    v.sort_by_key(|t| t.1);
+    let mut s = String::new();
+    for (i, (m, b)) in v.into_iter().rev().take(10).enumerate() {
+        s.push_str(&format!(
+            "`{}. {:<19} {:>3}`\n",
+            i + 1,
+            m.nick.or_else(|| Some(m.user.name)).unwrap(),
+            b
+        ));
+    }
+    let _ = msg
+        .channel_id
+        .send_message(ctx, |m| {
+            m.add_embed(|e| {
+                e.author(|a| {
+                    a.name("Top 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 holders")
+                        .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif")
+                })
+                .title(s)
+            })
+        })
+        .await;
     Ok(())
 }
 
@@ -161,7 +206,10 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let uid = msg.author.id.0;
     let db = get_db_handler(ctx).await;
     if db.get_user_mature(uid).await? == false {
-        let _ = msg.channel_id.say(ctx, "User must be marked as mature ☝🤓").await;
+        let _ = msg
+            .channel_id
+            .say(ctx, "User must be marked as mature ☝🤓")
+            .await;
         return Ok(());
     }
     let mut rng: StdRng = SeedableRng::from_entropy();
