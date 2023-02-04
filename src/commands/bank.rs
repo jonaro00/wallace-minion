@@ -7,6 +7,7 @@ use serenity::{
         macros::{command, group},
         Args, CommandResult,
     },
+    futures::StreamExt,
     model::prelude::Message,
     utils::parse_username,
 };
@@ -79,33 +80,30 @@ async fn close(ctx: &Context, msg: &Message) -> CommandResult {
 #[description("See the top 𝓚𝓪𝓹𝓼𝔂𝓵 holders in this guild.")]
 async fn top(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let ch = msg.channel_id;
-    let mem = ch
-        .to_channel_cached(ctx)
-        .ok_or("failed to get channel")?
-        .guild()
-        .ok_or("failed to get guild")?
-        .members(ctx)
-        .await?;
+    let mut mem = msg.guild_id.unwrap().members_iter(ctx).boxed();
     let mut v = vec![];
-    for m in mem {
+    while let Some(Ok(m)) = mem.next().await {
         match db.get_bank_account_balance(m.user.id.0).await {
             Ok(b) => v.push((m, b)),
             _ => (),
         }
     }
     v.sort_by_key(|t| t.1);
-    let mut s = String::new();
-    for (i, (m, b)) in v.into_iter().rev().take(10).enumerate() {
-        s.push_str(&format!(
-            "`{}. {:<19} {:>3}`\n",
-            i + 1,
-            m.nick.or_else(|| Some(m.user.name)).unwrap(),
-            b
-        ));
-    }
-    let _ = msg
-        .channel_id
+    let s: String = v
+        .into_iter()
+        .rev()
+        .take(5)
+        .enumerate()
+        .map(|(i, (m, b))| {
+            format!(
+                "`{}. {:<19} {:>3}`\n",
+                i + 1,
+                m.nick.or_else(|| Some(m.user.name)).unwrap(),
+                b
+            )
+        })
+        .collect();
+    msg.channel_id
         .send_message(ctx, |m| {
             m.add_embed(|e| {
                 e.author(|a| {
@@ -115,7 +113,7 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
                 .title(s)
             })
         })
-        .await;
+        .await?;
     Ok(())
 }
 
