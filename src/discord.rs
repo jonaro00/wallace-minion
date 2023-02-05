@@ -5,8 +5,7 @@ use std::{collections::HashSet, str::FromStr};
 
 use chrono::Utc;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use sea_orm::Database;
-use serenity::model::prelude::ChannelId;
+use sea_orm::{Database, strum::EnumString};
 use serenity::{
     async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
@@ -17,18 +16,22 @@ use serenity::{
         StandardFramework,
     },
     http::Http,
-    model::prelude::{Activity, GatewayIntents, GuildId, Message, Ready, ResumedEvent, UserId},
+    model::prelude::{
+        Activity, ChannelId, GatewayIntents, GuildId, Message, Ready, ResumedEvent, UserId,
+    },
     prelude::TypeMapKey,
 };
 use time::OffsetDateTime;
 use tokio::{task::JoinHandle, time::Duration};
 
+use crate::commands::riot::lol_report;
 use crate::{
     commands::{
         bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
         emote::EMOTE_GROUP,
         general::{random_name, GENERAL_GROUP, GUILD_DEFAULT_NAME},
+        riot::{LOL_GROUP, TFT_GROUP},
         scheduling::SCHEDULING_GROUP,
     },
     database::DBHandler,
@@ -81,8 +84,8 @@ pub async fn build_bot(
         .group(&BANK_GROUP)
         .group(&COOLTEXT_GROUP)
         .group(&SCHEDULING_GROUP)
-        // .group(&LOL_GROUP)
-        // .group(&TFT_GROUP)
+        .group(&LOL_GROUP)
+        .group(&TFT_GROUP)
         .help(&HELP_COMMAND);
     let client = DiscordClient::builder(
         discord_token,
@@ -119,7 +122,7 @@ struct WallaceRiot;
 impl TypeMapKey for WallaceRiot {
     type Value = Arc<RiotAPIClients>;
 }
-async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
+pub async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
     let data_read = ctx.data.read().await;
     data_read
         .get::<WallaceRiot>()
@@ -301,6 +304,18 @@ async fn built_in_tasks(ctx: Context) {
     });
 }
 
+#[derive(EnumString)]
+pub enum ScheduleTask {
+    #[strum(serialize = "say")]
+    Say,
+    #[strum(serialize = "defaultname")]
+    DefaultName,
+    #[strum(serialize = "randomname")]
+    RandomName,
+    #[strum(serialize = "lolweekly")]
+    LolWeekly,
+}
+
 async fn schedule_loop(ctx: Context) {
     built_in_tasks(ctx.clone()).await;
     let mut running_tasks: HashMap<i32, JoinHandle<()>> = HashMap::new();
@@ -336,15 +351,19 @@ async fn schedule_loop(ctx: Context) {
                                 .expect("Failed time conversion"),
                         )
                         .await;
-                        match t.cmd.as_str() {
-                            "say" => {
+                        let task = t.cmd.parse::<ScheduleTask>();
+                        if task.is_err() {
+                            break;
+                        }
+                        match task.unwrap() {
+                            ScheduleTask::Say => {
                                 let arg = match t.arg {
                                     Some(ref s) => s,
                                     None => break,
                                 };
                                 let _ = ChannelId(t.channel_id as u64).say(&ctx, arg).await;
                             }
-                            "randomname" => {
+                            ScheduleTask::RandomName => {
                                 let g = match ctx
                                     .cache
                                     .channel(t.channel_id as u64)
@@ -356,7 +375,7 @@ async fn schedule_loop(ctx: Context) {
                                 };
                                 let _ = set_server_name(&ctx, g, None, &random_name()).await;
                             }
-                            "defaultname" => {
+                            ScheduleTask::DefaultName => {
                                 let g = match ctx
                                     .cache
                                     .channel(t.channel_id as u64)
@@ -368,7 +387,18 @@ async fn schedule_loop(ctx: Context) {
                                 };
                                 let _ = set_server_name(&ctx, g, None, GUILD_DEFAULT_NAME).await;
                             }
-                            _ => (),
+                            ScheduleTask::LolWeekly => {
+                                let channel = ChannelId(t.channel_id as u64)
+                                    .to_channel(&ctx)
+                                    .await
+                                    .map_err(|_| "what")
+                                    .and_then(|c| c.guild().ok_or_else(|| "no guild"));
+                                if channel.is_err() {
+                                    println!("failed lolweekly");
+                                    continue;
+                                }
+                                let _ = lol_report(&ctx, channel.unwrap()).await;
+                            }
                         }
                     }
                     if let Err(e) = db.delete_task(t.id).await {

@@ -9,7 +9,7 @@ use serenity::{
     model::prelude::Message,
 };
 
-use crate::discord::get_db_handler;
+use crate::discord::{get_db_handler, ScheduleTask};
 
 #[group]
 #[commands(tasks)]
@@ -72,8 +72,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         let _ = msg.channel_id.say(ctx, "Invalid cron format").await;
         return Ok(());
     }
-    let cmds = ["defaultname", "randomname", "say"];
-    if !cmds.contains(&cmd.as_str()) {
+    if let Err(_) = cmd.parse::<ScheduleTask>() {
         let _ = msg.channel_id.say(ctx, "Invalid command to schedule").await;
         return Ok(());
     }

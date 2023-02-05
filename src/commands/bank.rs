@@ -192,6 +192,7 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 #[command]
 #[num_args(1)]
+#[aliases(cflip, kflip)]
 #[description("Double or nothing!")]
 #[usage("<amount>")]
 #[example("1")]

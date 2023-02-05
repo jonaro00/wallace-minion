@@ -1,19 +1,21 @@
-use std::collections::BTreeMap;
+use std::str::FromStr;
 
+use riven::consts::PlatformRoute;
 use serenity::{
     client::Context,
     framework::standard::{
         macros::{command, group},
         Args, CommandResult,
     },
-    model::prelude::Message,
+    futures::StreamExt,
+    model::prelude::{GuildChannel, Message},
+    utils::parse_username,
 };
 
-const WEEKLY_REPORT_MEMBERS_FILE: &str = "weekly_report_members.json";
-type LoLAccount = (String, String);
-type AccountList = Vec<LoLAccount>;
-type GuildWeeklyReportMembers = BTreeMap<String, AccountList>;
-type WeeklyReportMembers = BTreeMap<u64, GuildWeeklyReportMembers>;
+use crate::{
+    discord::{get_db_handler, get_riot_client},
+    services::riot_api::RiotAPIClients,
+};
 
 #[group]
 #[commands(lol)]
@@ -25,29 +27,27 @@ struct LoL;
 async fn lol(_ctx: &Context, _msg: &Message, mut _args: Args) -> CommandResult {
     Err(Box::new(serenity::Error::Other("Not implemented")))
 }
+
 #[command]
+#[only_in(guilds)]
 #[sub_commands(add, remove)]
 #[description("Show weekly playtime for every summoner added with 'add'.")]
 async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
-    lol_report(ctx, msg.channel_id).await
+    lol_report(ctx, msg.channel(ctx).await?.guild().ok_or("no guild")?).await
 }
+
 #[command]
 #[min_args(2)]
-#[description("Add a summoner to the weekly report every Monday morning.")]
-#[usage("<name> <summoners...>")]
-#[example("Me \"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
+#[description("Add summoners to the weekly report.")]
+#[usage("<user> <summoners...>")]
+#[example("@jonaro00 \"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let store = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE);
-    let mut m: WeeklyReportMembers = store.read().map_err(|_| "Failed to read members.")?;
-    let channel = msg.channel_id.0;
-    let member = args.current().unwrap().to_owned();
-    m.entry(channel)
-        .or_insert_with(GuildWeeklyReportMembers::new);
-    let cm = m.get_mut(&channel).unwrap();
-    cm.entry(member.clone()).or_insert_with(AccountList::new);
+    let db = get_db_handler(ctx).await;
+    let user = args.current().unwrap().to_owned();
+    let target_uid = parse_username(&user).ok_or("Invalid user tag")?;
     args.advance();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
-        let (server, name) = match parse_server_summoner(&arg) {
+        let (server, summoner) = match parse_server_summoner(&arg) {
             Ok(pair) => pair,
             Err(err) => {
                 let _ = msg
@@ -57,68 +57,41 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 return Ok(());
             }
         };
-        cm.get_mut(&member)
-            .unwrap()
-            .push((server.clone(), name.clone()));
         let _ = msg
             .channel_id
-            .say(ctx, format!("Adding [{server}] {name} to {member}."))
-            .await;
-    }
-    if let Err(err) = store.write(&Some(m)).map_err(|_| "Failed to save file.") {
-        let _ = msg
-            .channel_id
-            .say(ctx, format!("Failed to add accounts: {err}"))
+            .say(
+                ctx,
+                match db.create_lol_account(server.clone(), summoner.clone(), target_uid).await {
+                    Ok(_) => format!("Adding [{server}] {summoner} to {user}."),
+                    Err(err) => format!("Couldn't add {arg}: {err}"),
+                },
+            )
             .await;
     }
     Ok(())
 }
 #[command]
 #[num_args(1)]
-#[description(
-    "Remove all summoners associated with a name from the weekly report every Monday morning."
-)]
-#[usage("<name>")]
-#[example("Me")]
+#[description("Remove all summoners associated with a user from the weekly report.")]
+#[usage("<user>")]
+#[example("@jonaro00")]
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let store = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE);
-    let mut m: WeeklyReportMembers = store.read().map_err(|_| "Failed to read members.")?;
-    let member = args.current().unwrap().to_owned();
-    let channel = msg.channel_id.0;
-    let cm = match m.get_mut(&channel) {
-        None => {
-            let _ = msg
-                .channel_id
-                .say(ctx, format!("No members registered in <#{channel}>"))
-                .await;
-            return Ok(());
-        }
-        Some(cm) => cm,
-    };
-    let num = match cm.remove_entry(&member) {
-        None => {
-            let _ = msg
-                .channel_id
-                .say(ctx, format!("Didn't find member {member}"))
-                .await;
-            return Ok(());
-        }
-        Some((_, v)) => {
-            if cm.is_empty() {
-                m.remove_entry(&channel);
-            }
-            v.len()
-        }
-    };
-    if let Err(err) = store.write(&Some(m)).map_err(|_| "Failed to save file.") {
+    let db = get_db_handler(ctx).await;
+    let user = args.current().unwrap().to_owned();
+    let target_uid = parse_username(user).ok_or("Invalid user tag")?;
+    for acc in db.get_all_lol_accounts_in_user(target_uid).await? {
         let _ = msg
             .channel_id
-            .say(ctx, format!("Failed to remove member: {err}"))
-            .await;
-    } else {
-        let _ = msg
-            .channel_id
-            .say(ctx, format!("Removed {member} ({num} accounts)"))
+            .say(
+                ctx,
+                match db.delete_lol_account(acc.server.clone(), acc.summoner.clone()).await {
+                    Ok(_) => format!("Removed [{}] {}", acc.server, acc.summoner),
+                    Err(err) => format!(
+                        "Failed to remove [{}] {}: {}",
+                        acc.server, acc.summoner, err
+                    ),
+                },
+            )
             .await;
     }
     Ok(())
@@ -209,43 +182,37 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     Ok(())
 }
 
-async fn lol_report(ctx: &Context, channel: ChannelId) -> CommandResult {
+pub async fn lol_report(ctx: &Context, gc: GuildChannel) -> CommandResult {
+    let db = get_db_handler(ctx).await;
     let client = get_riot_client(ctx).await;
     let mut s = String::from("**Weekly playtime:**\n");
-    let m: WeeklyReportMembers = JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE)
-        .read()
-        .map_err(|_| "Failed to read members.")?;
-    let cid = channel.0;
-    let cm = match m.get(&cid) {
-        None => {
-            let _ = channel
-                .say(ctx, format!("No members registered in <#{cid}>"))
-                .await;
-            return Ok(());
+    let mut mem = gc.guild_id.members_iter(ctx).boxed();
+    let typing = ctx.http.start_typing(gc.id.0);
+    while let Some(Ok(m)) = mem.next().await {
+        if let Ok(v) = db.get_all_lol_accounts_in_user(m.user.id.0).await {
+            if v.is_empty() {
+                continue;
+            }
+            s.push_str(&format!(
+                "**{}**:\n",
+                m.nick.or_else(|| Some(m.user.name)).unwrap()
+            ));
+            for acc in v {
+                let server = match PlatformRoute::from_str(&acc.server) {
+                    Ok(o) => o,
+                    Err(err) => {
+                        s.push_str(&format!("{}: {err}\n", acc.server));
+                        continue;
+                    }
+                };
+                s = push_playtime_str(s, &client, server, &acc.summoner).await;
+            }
         }
-        Some(cm) => cm,
-    };
-    let typing = ctx.http.start_typing(cid);
-    for (member, accounts) in cm {
-        s.push_str(&format!("**{member}**:\n"));
-        for (ser, name) in accounts {
-            let server = match PlatformRoute::from_str(ser) {
-                Ok(o) => o,
-                Err(err) => {
-                    s.push_str(&format!("{ser}: {err}\n"));
-                    continue;
-                }
-            };
-            s = push_playtime_str(s, &client, server, name).await;
-        }
-    }
-    if s.is_empty() {
-        s.push_str("No members 😥");
     }
     if let Ok(typing) = typing {
         let _ = typing.stop();
     }
-    channel.say(ctx, s).await?;
+    gc.id.say(ctx, s).await?;
     Ok(())
 }
 
