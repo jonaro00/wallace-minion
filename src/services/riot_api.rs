@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, HashSet};
 
+use chrono::{Duration, Utc};
 pub use riven::consts::PlatformRoute;
 use riven::{
     consts::RegionalRoute,
     models::{summoner_v4, tft_summoner_v1},
     RiotApi, RiotApiError,
 };
-use time::{Duration, OffsetDateTime};
 
 pub struct RiotAPIClients {
     client_lol: RiotApi,
@@ -47,13 +47,24 @@ impl RiotAPIClients {
         region: RegionalRoute,
         puuid: &str,
     ) -> Result<(usize, i64), RiotApiError> {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        let then = now.checked_sub(Duration::WEEK.whole_seconds()).unwrap();
+        let start_time = Utc::now()
+            .checked_sub_signed(Duration::days(7))
+            .unwrap()
+            .timestamp();
         let mut secs = 0;
         let matches = self
             .client_lol
             .match_v5()
-            .get_match_ids_by_puuid(region, puuid, Some(100), None, None, Some(then), None, None)
+            .get_match_ids_by_puuid(
+                region,
+                puuid,
+                Some(100),
+                None,
+                None,
+                Some(start_time),
+                None,
+                None,
+            )
             .await?;
         for m_id in &matches {
             let mtch = self
@@ -71,13 +82,15 @@ impl RiotAPIClients {
         region: RegionalRoute,
         puuid: &str,
     ) -> Result<(usize, i64), RiotApiError> {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        let then = now.checked_sub(Duration::WEEK.whole_seconds()).unwrap();
+        let start_time = Utc::now()
+            .checked_sub_signed(Duration::days(7))
+            .unwrap()
+            .timestamp();
         let mut secs = 0;
         let matches = self
             .client_tft
             .tft_match_v1()
-            .get_match_ids_by_puuid(region, puuid, Some(100), None, None, Some(then))
+            .get_match_ids_by_puuid(region, puuid, Some(100), None, None, Some(start_time))
             .await?;
         for m_id in &matches {
             let mtch = self

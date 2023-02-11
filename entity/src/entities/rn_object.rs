@@ -3,31 +3,29 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "task")]
+#[sea_orm(table_name = "rn_object")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i32,
-    pub cron: String,
-    pub cmd: String,
-    pub arg: Option<String>,
-    pub channel_id: i64,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub guild_id: i64,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub value: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::channel::Entity",
-        from = "Column::ChannelId",
-        to = "super::channel::Column::Id",
+        belongs_to = "super::guild::Entity",
+        from = "Column::GuildId",
+        to = "super::guild::Column::Id",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]
-    Channel,
+    Guild,
 }
 
-impl Related<super::channel::Entity> for Entity {
+impl Related<super::guild::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Channel.def()
+        Relation::Guild.def()
     }
 }
 

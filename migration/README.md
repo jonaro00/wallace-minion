@@ -1,4 +1,18 @@
-# Running Migrator CLI
+# Workflow
+
+```sh
+# cargo install sea-orm-cli
+
+sea-orm-cli migrate generate <name>
+
+# Write the migration file
+
+sea-orm-cli migrate up # with dev DB in DATABASE_URL (in .env)
+
+sea-orm-cli generate entity -o entity/src/entities/
+```
+
+## Running Migrator CLI
 
 - Generate a new migration file
     ```sh

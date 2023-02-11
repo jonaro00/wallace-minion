@@ -10,25 +10,9 @@ use serenity::{
 };
 
 use crate::{
-    discord::wallace_version,
+    discord::{get_db_handler, wallace_version},
     services::{bonk_user, set_server_name},
 };
-
-// const GUILD_FILE: &str = "name_change_guilds.txt";
-
-// const _KORV_INGVAR_ANNIVERSARY_NAME: &str = "KorvIngvars Följeskaps Klubb";
-// const KORV_INGVAR_ANNIVERSARIES: &[&(Month, u8, &str)] = &[
-//     &(
-//         Month::September,
-//         13,
-//         "Idag minns vi dagen då KorvIngvar föddes <:IngvarDrip:931696495412011068>🥳🎉",
-//     ),
-//     &(
-//         Month::September,
-//         23,
-//         "Idag minns vi dagen då KorvIngvar dog <:IngvarDrip:931696495412011068>✝😞",
-//     ),
-// ];
 
 pub const GUILD_DEFAULT_NAME: &str = "Tisdags Gaming Klubb";
 
@@ -149,7 +133,17 @@ const GUILD_NAME_OBJECTS: &[&str] = &[
 ];
 
 #[group]
-#[commands(ping, version, speak, riddle, delete, bonk, defaultname, randomname)]
+#[commands(
+    ping,
+    version,
+    speak,
+    riddle,
+    delete,
+    bonk,
+    defaultname,
+    randomname,
+    list
+)]
 #[description("Test")]
 struct General;
 
@@ -184,7 +178,7 @@ async fn version(ctx: &Context, msg: &Message) -> CommandResult {
 #[description("Make me speak with TTS")]
 async fn speak(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let r = args.rest();
-    let s = if r.len() > 0 {
+    let s = if !r.is_empty() {
         r
     } else {
         "Hello fellow Discord user! Hope you like my hammer. xQcL"
@@ -237,10 +231,25 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 #[command]
+#[sub_commands(set)]
 #[description("Set the server name to the default.")]
 #[only_in(guilds)]
 async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), GUILD_DEFAULT_NAME).await
+}
+
+#[command]
+#[num_args(1)]
+#[description("Set what the default server name is.")]
+#[only_in(guilds)]
+async fn set(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    db.set_guild_default_name(
+        msg.guild_id.unwrap().0,
+        args.quoted().current().unwrap().to_owned(),
+    )
+    .await?;
+    Ok(())
 }
 
 #[command]
@@ -249,6 +258,24 @@ async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
 #[description("Set the server name to a random one.")]
 async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name()).await
+}
+
+#[command]
+#[only_in(guilds)]
+#[required_permissions("ADMINISTRATOR")]
+async fn list(ctx: &Context, msg: &Message) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    let _ = msg
+        .channel_id
+        .say(
+            ctx,
+            format!(
+                "{:?}",
+                db.get_guild_random_names(msg.guild_id.unwrap().0).await?
+            ),
+        )
+        .await;
+    Ok(())
 }
 
 pub fn random_name() -> String {

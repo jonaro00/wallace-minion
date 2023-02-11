@@ -61,7 +61,10 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             .channel_id
             .say(
                 ctx,
-                match db.create_lol_account(server.clone(), summoner.clone(), target_uid).await {
+                match db
+                    .create_lol_account(server.clone(), summoner.clone(), target_uid)
+                    .await
+                {
                     Ok(_) => format!("Adding [{server}] {summoner} to {user}."),
                     Err(err) => format!("Couldn't add {arg}: {err}"),
                 },
@@ -84,7 +87,10 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             .channel_id
             .say(
                 ctx,
-                match db.delete_lol_account(acc.server.clone(), acc.summoner.clone()).await {
+                match db
+                    .delete_lol_account(acc.server.clone(), acc.summoner.clone())
+                    .await
+                {
                     Ok(_) => format!("Removed [{}] {}", acc.server, acc.summoner),
                     Err(err) => format!(
                         "Failed to remove [{}] {}: {}",
@@ -193,10 +199,7 @@ pub async fn lol_report(ctx: &Context, gc: GuildChannel) -> CommandResult {
             if v.is_empty() {
                 continue;
             }
-            s.push_str(&format!(
-                "**{}**:\n",
-                m.nick.or_else(|| Some(m.user.name)).unwrap()
-            ));
+            s.push_str(&format!("**{}**:\n", m.nick.unwrap_or(m.user.name)));
             for acc in v {
                 let server = match PlatformRoute::from_str(&acc.server) {
                     Ok(o) => o,

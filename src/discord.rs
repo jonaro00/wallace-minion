@@ -5,7 +5,7 @@ use std::{collections::HashSet, str::FromStr};
 
 use chrono::Utc;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use sea_orm::{Database, strum::EnumString};
+use sea_orm::Database;
 use serenity::{
     async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
@@ -21,7 +21,7 @@ use serenity::{
     },
     prelude::TypeMapKey,
 };
-use time::OffsetDateTime;
+use strum::EnumString;
 use tokio::{task::JoinHandle, time::Duration};
 
 use crate::commands::riot::lol_report;
@@ -149,12 +149,12 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data: Ready) {
         println!("{} is connected!", data.user.name);
         let activity = if cfg!(debug_assertions) {
-            Activity::playing(&format!(
+            Activity::playing(format!(
                 "on a construction site 🔨🙂 | {}",
                 wallace_version()
             ))
         } else {
-            Activity::watching(&format!("you 🔨🙂 | !help | {}", wallace_version()))
+            Activity::watching(format!("you 🔨🙂 | !help | {}", wallace_version()))
         };
         let _ = ctx.set_activity(activity).await;
     }
@@ -225,7 +225,7 @@ async fn before_hook(ctx: &Context, msg: &Message, _cmd_name: &str) -> bool {
 #[hook]
 async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Result<(), CommandError>) {
     if let Err(why) = error {
-        println!("[{}] Error in {}: {:?}", get_time(), cmd_name, why);
+        println!("Error in {}: {:?}", cmd_name, why);
         let _ = msg
             .channel_id
             .say(ctx, "I did a bit of an epic fail there... 😕")
@@ -247,12 +247,7 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
         }
         DispatchError::OnlyForGuilds => "That can only be done in servers 😋".to_owned(),
         _ => {
-            println!(
-                "[{}] Unhandled dispatch error in {}. {:?}",
-                get_time(),
-                cmd_name,
-                err
-            );
+            println!("Unhandled dispatch error in {}. {:?}", cmd_name, err);
             "Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned()
         }
     };
@@ -272,10 +267,6 @@ async fn help_command(
 ) -> CommandResult {
     let _ = with_embeds(context, msg, args, help_options, groups, owners).await;
     Ok(())
-}
-
-fn get_time() -> OffsetDateTime {
-    OffsetDateTime::now_utc()
 }
 
 const WEEKLY_PAYOUT: i64 = 10;
@@ -392,7 +383,7 @@ async fn schedule_loop(ctx: Context) {
                                     .to_channel(&ctx)
                                     .await
                                     .map_err(|_| "what")
-                                    .and_then(|c| c.guild().ok_or_else(|| "no guild"));
+                                    .and_then(|c| c.guild().ok_or("no guild"));
                                 if channel.is_err() {
                                     println!("failed lolweekly");
                                     continue;

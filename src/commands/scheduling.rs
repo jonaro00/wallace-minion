@@ -39,7 +39,7 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
                     })
                     .collect()
             })
-            .unwrap_or_else(|e| e)
+            .unwrap_or_else(|e| e.to_string())
     );
     let _ = msg.channel_id.say(ctx, s).await;
     Ok(())
@@ -53,7 +53,7 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
     "Add a scheduled task to trigger according to a schedule.
     Use a cron schedule string in the format \"second minute hour day-of-month month day-of-week year\" (UTC based).
     Tasks with a schedule that expire are cleaned up automatically. Use the 'remove' sub-command to remove tasks.
-    Availible commands: `TBA`."
+    Availible commands: say, defaultname, randomname, lolweekly."
 )]
 #[usage("<cron_schedule> <command> [argument]")]
 #[example(r#""0 9 20 4 10 * 2023" say "This message is sent at 8:09 PM UTC on Oct 4th 2023.""#)]
@@ -72,7 +72,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         let _ = msg.channel_id.say(ctx, "Invalid cron format").await;
         return Ok(());
     }
-    if let Err(_) = cmd.parse::<ScheduleTask>() {
+    if cmd.parse::<ScheduleTask>().is_err() {
         let _ = msg.channel_id.say(ctx, "Invalid command to schedule").await;
         return Ok(());
     }
@@ -84,8 +84,8 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             ctx,
             db.create_task(cron, cmd, arg, msg.channel_id.0)
                 .await
-                .map(|_| "Added")
-                .unwrap_or_else(|e| e),
+                .map(|_| "Added".to_owned())
+                .unwrap_or_else(|e| e.to_string()),
         )
         .await;
     Ok(())
@@ -110,8 +110,8 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             ctx,
             db.delete_task(id.unwrap())
                 .await
-                .map(|_| "Removed")
-                .unwrap_or_else(|e| e),
+                .map(|_| "Removed".to_owned())
+                .unwrap_or_else(|e| e.to_string()),
         )
         .await;
     Ok(())

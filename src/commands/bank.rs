@@ -35,7 +35,7 @@ async fn account(ctx: &Context, msg: &Message) -> CommandResult {
     let upic = &msg
         .author
         .avatar_url()
-        .unwrap_or("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif".into());
+        .unwrap_or_else(|| "https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif".into());
     let _ = msg
         .channel_id
         .send_message(ctx, |m| {
@@ -83,9 +83,8 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
     let mut mem = msg.guild_id.unwrap().members_iter(ctx).boxed();
     let mut v = vec![];
     while let Some(Ok(m)) = mem.next().await {
-        match db.get_bank_account_balance(m.user.id.0).await {
-            Ok(b) => v.push((m, b)),
-            _ => (),
+        if let Ok(b) = db.get_bank_account_balance(m.user.id.0).await {
+            v.push((m, b))
         }
     }
     v.sort_by_key(|t| t.1);
@@ -98,7 +97,7 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
             format!(
                 "`{}. {:<19} {:>3}`\n",
                 i + 1,
-                m.nick.or_else(|| Some(m.user.name)).unwrap(),
+                m.nick.unwrap_or(m.user.name),
                 b
             )
         })
@@ -122,11 +121,14 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
 #[min_args(1)]
 #[max_args(3)]
 #[description(
-    "Summon mods in chat to start the GAMBA. Tag a user and they might get bonked. Or you."
+    "Summon mods in chat to start the GAMBA. Tag a user and they might get bonked. Or you.
+    A higher size increases bonk time, but reduces chance of success.
+    A higher bet increases the chance of success."
 )]
 #[usage("[S|M|L|XL|XXL] [amount] <user>")]
 #[example("@Yxaria")]
 #[example("M 5 @Yxaria")]
+#[example("XXL 30 @Yxaria")]
 async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let a = args.current().unwrap();
@@ -204,7 +206,7 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .map_err(|_| "Invalid amount")?;
     let uid = msg.author.id.0;
     let db = get_db_handler(ctx).await;
-    if db.get_user_mature(uid).await? == false {
+    if !db.get_user_mature(uid).await? {
         let _ = msg
             .channel_id
             .say(ctx, "User must be marked as mature ☝🤓")
@@ -240,7 +242,7 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .send_message(ctx, |m| {
             m.add_embed(|e| {
                 e.author(|a| {
-                    a.name(format!("Coin flip. 50% chance!"))
+                    a.name("Coin flip. 50% chance!")
                         .icon_url("https://cdn.7tv.app/emote/61e63db277175547b425ce27/1x.gif")
                 })
                 .title(reply)
@@ -276,7 +278,7 @@ async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .unwrap()
         .member(ctx, target_uid)
         .await
-        .map(|m| m.nick.unwrap_or("?".into()))
+        .map(|m| m.nick.unwrap_or(m.user.name))
         .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id

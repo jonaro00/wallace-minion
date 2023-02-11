@@ -1,7 +1,8 @@
-pub use sea_orm_migration::prelude::*;
+use sea_orm_migration::prelude::*;
 
 mod m20230127_000001_start;
 mod m20230202_231652_mature_user;
+mod m20230210_221603_random_name;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20230127_000001_start::Migration),
             Box::new(m20230202_231652_mature_user::Migration),
+            Box::new(m20230210_221603_random_name::Migration),
         ]
     }
 }
