@@ -1,4 +1,4 @@
 src/prisma.rs
 target*
 .env*
-Secrets.toml
+Secrets*.toml

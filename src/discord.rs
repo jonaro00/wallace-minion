@@ -75,7 +75,6 @@ pub async fn build_bot(
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!").owners(owners))
         .unrecognised_command(unknown_command_hook)
-        .before(before_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
@@ -190,39 +189,6 @@ async fn unknown_command_hook(ctx: &Context, msg: &Message, unknown_command_name
 }
 
 #[hook]
-async fn before_hook(ctx: &Context, msg: &Message, _cmd_name: &str) -> bool {
-    if !cfg!(debug_assertions) {
-        return true;
-    }
-    let ch_name = msg.channel_id.name(ctx).await;
-    let pat = "test";
-    match ch_name {
-        Some(n) => {
-            if !n.contains(pat) {
-                println!(
-                    "[DEV] Ignoring command in {}, name does not contain '{}'.",
-                    n, pat
-                );
-                false
-            } else {
-                // guild channel with 'test' in the name
-                true
-            }
-        }
-        None => match msg.channel_id.to_channel(ctx).await.map(|c| c.private()) {
-            Ok(Some(_)) => true, // DM
-            _ => {
-                println!(
-                    "[DEV] Ignoring command in {}, could not read channel name.",
-                    msg.channel_id.0
-                );
-                false
-            }
-        },
-    }
-}
-
-#[hook]
 async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Result<(), CommandError>) {
     if let Err(why) = error {
         println!("Error in {}: {:?}", cmd_name, why);
@@ -269,7 +235,7 @@ async fn help_command(
     Ok(())
 }
 
-const WEEKLY_PAYOUT: i64 = 10;
+const WEEKLY_PAYOUT: i64 = 6;
 async fn built_in_tasks(ctx: Context) {
     let db = get_db_handler(&ctx).await;
     // Weekly payout
