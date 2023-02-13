@@ -1,5 +1,5 @@
 [package]
-name = "entity"
+name = "prisma-cli"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -7,7 +7,6 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sea-orm = { version = "0.11", default-features = false, features = [
-    "sqlx-postgres",
-    "runtime-tokio-rustls",
+prisma-client-rust-cli = { tag = "0.6.4", git = "https://github.com/Brendonovich/prisma-client-rust", default-features = false, features = [
+    "postgresql",
 ] }

@@ -5,7 +5,6 @@ use std::{collections::HashSet, str::FromStr};
 
 use chrono::Utc;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use sea_orm::Database;
 use serenity::{
     async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
@@ -24,17 +23,17 @@ use serenity::{
 use strum::EnumString;
 use tokio::{task::JoinHandle, time::Duration};
 
-use crate::commands::riot::lol_report;
 use crate::{
     commands::{
         bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
         emote::EMOTE_GROUP,
         general::{random_name, GENERAL_GROUP, GUILD_DEFAULT_NAME},
-        riot::{LOL_GROUP, TFT_GROUP},
+        riot::{lol_report, LOL_GROUP, TFT_GROUP},
         scheduling::SCHEDULING_GROUP,
     },
-    database::DBHandler,
+    database::WallaceDBClient,
+    prisma::{new_client_with_url, PrismaClient},
     services::{riot_api::RiotAPIClients, set_server_name},
 };
 
@@ -98,11 +97,10 @@ pub async fn build_bot(
     .await
     .expect("Error creating Discord client");
 
-    let db = Database::connect(db_url)
+    let db = new_client_with_url(&db_url)
         .await
         .expect("Database connection failed.");
     println!("Connected to database!");
-    let dbh = DBHandler { db };
 
     // Insert shared data
     {
@@ -112,7 +110,7 @@ pub async fn build_bot(
             &riot_token_lol,
             &riot_token_tft,
         )));
-        data.insert::<WallaceDB>(Arc::new(dbh));
+        data.insert::<WallaceDB>(Arc::new(db));
     } // Release lock
 
     client
@@ -123,8 +121,9 @@ impl TypeMapKey for WallaceRiot {
     type Value = Arc<RiotAPIClients>;
 }
 pub async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
-    let data_read = ctx.data.read().await;
-    data_read
+    ctx.data
+        .read()
+        .await
         .get::<WallaceRiot>()
         .expect("Expected Riot Client in TypeMap.")
         .clone()
@@ -132,11 +131,12 @@ pub async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
 
 struct WallaceDB;
 impl TypeMapKey for WallaceDB {
-    type Value = Arc<DBHandler>;
+    type Value = Arc<PrismaClient>;
 }
-pub async fn get_db_handler(ctx: &Context) -> Arc<DBHandler> {
-    let data_read = ctx.data.read().await;
-    data_read
+pub async fn get_db_handler(ctx: &Context) -> Arc<PrismaClient> {
+    ctx.data
+        .read()
+        .await
         .get::<WallaceDB>()
         .expect("Expected DB Handler in TypeMap.")
         .clone()
@@ -283,13 +283,11 @@ async fn built_in_tasks(ctx: Context) {
             )
             .await;
             println!("Time for veckopeng.");
-            // let trx = db.begin().await?;
             for u in db.get_all_users().await.expect("Could not fetch users") {
                 let _ = db
                     .add_bank_account_balance(u.id as u64, WEEKLY_PAYOUT)
                     .await;
             }
-            // db.commit(trx).await?;
             println!("Veckopeng has been dealt.");
         }
     });

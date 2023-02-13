@@ -85,9 +85,10 @@ pub async fn get_emote_name_url(q: &str) -> Result<(String, String), Box<dyn Err
     };
     let emote_id = &emote.id;
     let file_type = if emote.animated { "gif" } else { "png" };
-    Ok((emote.name, format!(
-        "https://cdn.7tv.app/emote/{emote_id}/4x.{file_type}",
-    )))
+    Ok((
+        emote.name,
+        format!("https://cdn.7tv.app/emote/{emote_id}/4x.{file_type}",),
+    ))
 }
 
 #[cfg(test)]
@@ -136,6 +137,8 @@ mod tests {
     }
     #[tokio::test]
     async fn not_found() {
-        assert!(get_emote_name_url("somethingthatwillprobablyneverexist").await.is_err());
+        assert!(get_emote_name_url("somethingthatwillprobablyneverexist")
+            .await
+            .is_err());
     }
 }

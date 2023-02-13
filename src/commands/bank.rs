@@ -12,7 +12,7 @@ use serenity::{
     utils::parse_username,
 };
 
-use crate::{discord::get_db_handler, services::bonk_user};
+use crate::{database::WallaceDBClient, discord::get_db_handler, services::bonk_user};
 
 #[group]
 #[commands(account, gamba, coinflip, give, mint, set_mature)]
@@ -159,12 +159,10 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let target_uid = parse_username(a).ok_or("Invalid user tag")?;
 
     let uid = msg.author.id.0;
-    let trx = db.begin().await?;
     if let Err(e) = db.subtract_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
-    db.commit(trx).await?;
 
     // m * 35 * a^(1/3)-11 bounded to [1, 100]
     let chance = 100.min(1.max((modifier * 35.0 * (amount as f32).powf(1.0 / 3.0) - 11.0) as u32));
@@ -214,7 +212,6 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         return Ok(());
     }
     let mut rng: StdRng = SeedableRng::from_entropy();
-    let trx = db.begin().await?;
     if let Err(e) = db.has_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
@@ -232,7 +229,6 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             format!("🟥 Lost {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"),
         )
     };
-    db.commit(trx).await?;
     if let Err(e) = res {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
@@ -305,12 +301,10 @@ async fn mint(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let a = args.current().unwrap();
     let amount: i64 = a.parse().map_err(|_| "Invalid amount")?;
     let uid = msg.author.id.0;
-    let trx = db.begin().await?;
     if let Err(e) = db.add_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
-    db.commit(trx).await?;
     let _ = msg.react(ctx, '🫡').await;
     Ok(())
 }
@@ -327,12 +321,10 @@ async fn set_mature(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
     args.advance();
     let a = args.current().unwrap();
     let mature: bool = a.parse().map_err(|_| "Invalid bool")?;
-    let trx = db.begin().await?;
     if let Err(e) = db.set_user_mature(target_uid, mature).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
-    db.commit(trx).await?;
     let _ = msg.react(ctx, '🫡').await;
     Ok(())
 }

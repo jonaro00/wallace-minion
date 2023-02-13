@@ -9,7 +9,10 @@ use serenity::{
     model::prelude::Message,
 };
 
-use crate::discord::{get_db_handler, ScheduleTask};
+use crate::{
+    database::WallaceDBClient,
+    discord::{get_db_handler, ScheduleTask},
+};
 
 #[group]
 #[commands(tasks)]

@@ -1,0 +1,3 @@
+[alias]
+runs = "shuttle run"
+prisma = "run -p prisma-cli --target-dir target_prisma-cli --"

@@ -6,6 +6,7 @@ use discord::build_bot;
 mod commands;
 mod database;
 mod discord;
+mod prisma;
 mod services;
 
 #[shuttle_service::main]
@@ -20,7 +21,11 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     let riot_token_tft = secret_store
         .get("RIOT_TOKEN_TFT")
         .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
-    let db_key = if cfg!(debug_assertions) { "DATABASE_URL" } else { "DATABASE_URL_PRODUCTION" };
+    let db_key = if cfg!(debug_assertions) {
+        "DATABASE_URL"
+    } else {
+        "DATABASE_URL_PRODUCTION"
+    };
     let db_url = secret_store
         .get(db_key)
         .expect("URL for database missing! (env variable `DATABASE_URL`)");

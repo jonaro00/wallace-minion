@@ -1,307 +1,317 @@
+use std::{future::Future, sync::Arc};
+
 use anyhow::{anyhow, Result};
-#[allow(unused_imports)]
-use sea_orm::{
-    entity::*, query::*, sea_query::OnConflict, DatabaseConnection, DatabaseTransaction,
-};
+use async_trait::async_trait;
 
-use entity::{prelude::*, *};
+use crate::prisma::*;
 
-pub struct DBHandler {
-    pub db: DatabaseConnection,
-}
-
-impl DBHandler {
-    pub async fn begin(&self) -> Result<DatabaseTransaction> {
-        self.db
-            .begin()
-            .await
-            .map_err(|_| anyhow!("Database call failed"))
-    }
-    pub async fn commit(&self, trx: DatabaseTransaction) -> Result<()> {
-        trx.commit()
-            .await
-            .map_err(|_| anyhow!("Database call failed"))
-    }
+#[async_trait]
+pub trait WallaceDBClient {
+    async fn do_trx<T, F, FFut>(&self, func: F) -> Result<T>
+    where
+        T: Send,
+        FFut: Future<Output = Result<T>> + Send,
+        F: FnOnce(Arc<PrismaClient>) -> FFut + Send;
     fn positive(&self, amount: i64) -> Result<()> {
         if !amount.is_positive() {
             return Err(anyhow!("Non-positive amount"));
         }
         Ok(())
     }
-    pub async fn create_guild(&self, id: u64) -> Result<guild::Model> {
-        Guild::insert(guild::ActiveModel {
-            id: Set(id as i64),
-            default_name: Set(None),
-        })
-        .on_conflict(
-            OnConflict::column(guild::Column::Id)
-                .do_nothing()
-                .to_owned(),
-        )
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to create guild"))
-    }
-    pub async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Model> {
-        let _ = self.create_guild(id).await;
-        Guild::update(guild::ActiveModel {
-            id: Set(id as i64),
-            default_name: Set(Some(value)),
-        })
-        .exec(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to update guild"))
-    }
-    pub async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
-        let subs = Guild::find_by_id(id as i64)
-            .find_with_related(RnSubject)
-            .all(&self.db)
-            .await
-            .map_err(|_| anyhow!("Database call failed"))?
-            .first()
-            .ok_or(anyhow!("No subjects in this guild"))?
-            .1
-            .iter()
-            .map(|m| m.value.clone())
-            .collect::<Vec<_>>();
-        let obs = Guild::find_by_id(id as i64)
-            .find_with_related(RnObject)
-            .all(&self.db)
-            .await
-            .map_err(|_| anyhow!("Database call failed"))?
-            .first()
-            .ok_or(anyhow!("No objects in this guild"))?
-            .1
-            .iter()
-            .map(|m| m.value.clone())
-            .collect::<Vec<_>>();
-        Ok((subs, obs))
-    }
-    pub async fn add_guild_random_name_subject(
+    async fn upsert_guild(&self, id: u64) -> Result<guild::Data>;
+    async fn transfer_bank_account_balance(
+        &self,
+        from_user_id: u64,
+        to_user_id: u64,
+        amount: i64,
+    ) -> Result<(i64, i64)>;
+    async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Data>;
+    async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)>;
+    async fn add_guild_random_name_subject(
         &self,
         id: u64,
         value: String,
-    ) -> Result<rn_subject::Model> {
-        let _ = self.create_guild(id).await;
-        RnSubject::insert(rn_subject::ActiveModel {
-            guild_id: Set(id as i64),
-            value: Set(value),
-        })
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to update guild"))
-    }
-    pub async fn add_guild_random_name_object(
-        &self,
-        id: u64,
-        value: String,
-    ) -> Result<rn_object::Model> {
-        let _ = self.create_guild(id).await;
-        RnObject::insert(rn_object::ActiveModel {
-            guild_id: Set(id as i64),
-            value: Set(value),
-        })
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to update guild"))
-    }
-    pub async fn create_user(&self, id: u64) -> Result<user::Model> {
-        User::insert(user::ActiveModel {
-            id: Set(id as i64),
-            bank_account_id: Set(None),
-            ..Default::default()
-        })
-        .on_conflict(OnConflict::column(user::Column::Id).do_nothing().to_owned())
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to create user"))
-    }
-    pub async fn get_user_mature(&self, id: u64) -> Result<bool> {
-        Ok(User::find_by_id(id as i64)
-            .one(&self.db)
-            .await
-            .map_err(|_| anyhow!("Database call failed"))?
-            .ok_or(anyhow!("User not registered in Wallace"))?
-            .mature)
-    }
-    pub async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Model> {
-        User::update(user::ActiveModel {
-            id: Set(id as i64),
-            mature: Set(mature),
-            bank_account_id: NotSet,
-        })
-        .exec(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to update user"))
-    }
-    pub async fn get_all_users(&self) -> Result<Vec<user::Model>> {
-        User::find()
-            .all(&self.db)
-            .await
-            .map_err(|_| anyhow!("Failed to get users"))
-    }
-    pub async fn create_channel(&self, id: u64) -> Result<channel::Model> {
-        Channel::insert(channel::ActiveModel { id: Set(id as i64) })
-            .on_conflict(
-                OnConflict::column(channel::Column::Id)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .exec_with_returning(&self.db)
-            .await
-            .map_err(|_| anyhow!("Failed to create channel"))
-    }
-    pub async fn create_lol_account(
+    ) -> Result<rn_subject::Data>;
+    async fn add_guild_random_name_object(&self, id: u64, value: String)
+        -> Result<rn_object::Data>;
+    async fn upsert_user(&self, id: u64) -> Result<user::Data>;
+    async fn get_user_mature(&self, id: u64) -> Result<bool>;
+    async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Data>;
+    async fn get_all_users(&self) -> Result<Vec<user::Data>>;
+    async fn upsert_channel(&self, id: u64) -> Result<channel::Data>;
+    async fn create_lol_account(
         &self,
         server: String,
         summoner: String,
         user_id: u64,
-    ) -> Result<lol_account::Model> {
-        let _ = self.create_user(user_id).await;
-        LolAccount::insert(lol_account::ActiveModel {
-            id: NotSet,
-            server: Set(server),
-            summoner: Set(summoner),
-            user_id: Set(user_id as i64),
-        })
-        .on_conflict(
-            OnConflict::column(lol_account::Column::Id)
-                .do_nothing()
-                .to_owned(),
-        )
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to create lol_account"))
-    }
-    pub async fn delete_lol_account(&self, server: String, summoner: String) -> Result<()> {
-        match LolAccount::delete(lol_account::ActiveModel {
-            id: NotSet,
-            server: Set(server),
-            summoner: Set(summoner),
-            user_id: NotSet,
-        })
-        .exec(&self.db)
-        .await
-        {
-            Ok(r) => {
-                if r.rows_affected == 0 {
-                    Err(anyhow!("No such Account"))
-                } else {
-                    Ok(())
-                }
+    ) -> Result<lol_account::Data>;
+    async fn delete_lol_account(
+        &self,
+        server: String,
+        summoner: String,
+    ) -> Result<lol_account::Data>;
+    async fn get_all_lol_accounts_in_user(&self, id: u64) -> Result<Vec<lol_account::Data>>;
+    async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Data>;
+    async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Data>;
+    async fn delete_bank_account(&self, user_id: u64) -> Result<bank_account::Data>;
+    async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64>;
+    async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<()>;
+    async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64>;
+    async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64>;
+    async fn create_task(
+        &self,
+        cron: String,
+        cmd: String,
+        arg: Option<String>,
+        channel_id: u64,
+    ) -> Result<task::Data>;
+    async fn delete_task(&self, id: i32) -> Result<task::Data>;
+    async fn get_all_tasks(&self) -> Result<Vec<task::Data>>;
+    async fn get_all_tasks_in_channel(&self, id: u64) -> Result<Vec<task::Data>>;
+}
+
+#[async_trait]
+impl WallaceDBClient for PrismaClient {
+    async fn do_trx<T, F, FFut>(&self, func: F) -> Result<T>
+    where
+        T: Send,
+        FFut: Future<Output = Result<T>> + Send,
+        F: FnOnce(Arc<PrismaClient>) -> FFut + Send,
+    {
+        let (tx, tx_client) = self._transaction().begin().await?;
+        let a = Arc::new(tx_client);
+        match func(a.clone()).await {
+            ok @ Ok(_) => {
+                let tx_client =
+                    Arc::try_unwrap(a).expect("the reference in the transaction to be dropped");
+                tx.commit(tx_client)
+                    .await
+                    .map_err(|_| anyhow!("Failed to commit transaction"))?;
+                ok
             }
-            Err(_) => Err(anyhow!("Failed to delete task")),
+            err @ Err(_) => {
+                let tx_client =
+                    Arc::try_unwrap(a).expect("the reference in the transaction to be dropped");
+                tx.rollback(tx_client)
+                    .await
+                    .map_err(|_| anyhow!("Failed to rollback transaction"))?;
+                err
+            }
         }
     }
-    pub async fn get_all_lol_accounts_in_user(&self, id: u64) -> Result<Vec<lol_account::Model>> {
-        let v = User::find_by_id(id as i64)
-            .find_with_related(LolAccount)
-            .all(&self.db)
+    async fn upsert_guild(&self, id: u64) -> Result<guild::Data> {
+        self.guild()
+            .upsert(guild::id::equals(id as i64), (id as i64, vec![]), vec![])
+            .exec()
             .await
-            .map_err(|_| anyhow!("Database call failed"))?
-            .first()
-            .ok_or(anyhow!("No accounts in this user"))?
-            .1
-            .clone();
-        Ok(v)
+            .map_err(|q| anyhow!(q))
     }
-    async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Model> {
-        Ok(User::find_by_id(user_id as i64)
-            .find_with_related(BankAccount)
-            .all(&self.db)
+    async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Data> {
+        self.guild()
+            .upsert(
+                guild::id::equals(id as i64),
+                (id as i64, vec![]),
+                vec![guild::default_name::set(Some(value))],
+            )
+            .exec()
             .await
-            .map_err(|_| anyhow!("Database call failed"))?
-            .first()
-            .ok_or(anyhow!("User not registered in Wallace"))?
-            .1
-            .first()
-            .ok_or(anyhow!("User has no account"))?
-            .clone())
+            .map_err(|q| anyhow!(q))
     }
-    pub async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Model> {
+    async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
+        let r = self
+            .guild()
+            .find_unique(guild::id::equals(id as i64))
+            .with(guild::rn_subject::fetch(vec![]))
+            .with(guild::rn_object::fetch(vec![]))
+            .exec()
+            .await?
+            .ok_or_else(|| anyhow!("Guild not found"))?;
+        let subs = r.rn_subject()?;
+        let objs = r.rn_object()?;
+        Ok((
+            subs.iter().map(|s| s.value.clone()).collect(),
+            objs.iter().map(|s| s.value.clone()).collect(),
+        ))
+    }
+    async fn add_guild_random_name_subject(
+        &self,
+        id: u64,
+        value: String,
+    ) -> Result<rn_subject::Data> {
+        self.upsert_guild(id).await?;
+        self.rn_subject()
+            .create(value, guild::id::equals(id as i64), vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn add_guild_random_name_object(
+        &self,
+        id: u64,
+        value: String,
+    ) -> Result<rn_object::Data> {
+        self.upsert_guild(id).await?;
+        self.rn_object()
+            .create(value, guild::id::equals(id as i64), vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn upsert_user(&self, id: u64) -> Result<user::Data> {
+        self.user()
+            .upsert(user::id::equals(id as i64), (id as i64, vec![]), vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn get_user_mature(&self, id: u64) -> Result<bool> {
+        self.user()
+            .find_unique(user::id::equals(id as i64))
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+            .and_then(|u| u.ok_or_else(|| anyhow!("User not registered in Wallace")))
+            .map(|u| u.mature)
+    }
+    async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Data> {
+        self.user()
+            .update(user::id::equals(id as i64), vec![user::mature::set(mature)])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn get_all_users(&self) -> Result<Vec<user::Data>> {
+        self.user()
+            .find_many(vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn upsert_channel(&self, id: u64) -> Result<channel::Data> {
+        self.channel()
+            .upsert(channel::id::equals(id as i64), (id as i64, vec![]), vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn create_lol_account(
+        &self,
+        server: String,
+        summoner: String,
+        user_id: u64,
+    ) -> Result<lol_account::Data> {
+        self.upsert_user(user_id).await?;
+        self.lol_account()
+            .create(server, summoner, user::id::equals(user_id as i64), vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn delete_lol_account(
+        &self,
+        server: String,
+        summoner: String,
+    ) -> Result<lol_account::Data> {
+        let a = self
+            .lol_account()
+            .find_first(vec![
+                lol_account::server::equals(server),
+                lol_account::summoner::equals(summoner),
+            ])
+            .exec()
+            .await?
+            .ok_or_else(|| anyhow!("LoL account not found"))?;
+        self.lol_account()
+            .delete(lol_account::id::equals(a.id))
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn get_all_lol_accounts_in_user(&self, id: u64) -> Result<Vec<lol_account::Data>> {
+        self.user()
+            .find_unique(user::id::equals(id as i64))
+            .with(user::lol_account::fetch(vec![]))
+            .exec()
+            .await?
+            .ok_or_else(|| anyhow!("asdf"))?
+            .lol_account()
+            .cloned()
+            .map_err(|q| anyhow!(q))
+    }
+    async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
+        self.user()
+            .find_unique(user::id::equals(user_id as i64))
+            .with(user::bank_account::fetch())
+            .exec()
+            .await?
+            .ok_or_else(|| anyhow!("asdf"))?
+            .bank_account()
+            .map_err(|q| anyhow!(q))?
+            .ok_or_else(|| anyhow!("asdf"))
+            .cloned()
+    }
+    async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
         if self.get_bank_account(user_id).await.is_ok() {
             return Err(anyhow!("Account already open"));
         }
-        let _ = self.create_user(user_id).await;
-        let r = BankAccount::insert(bank_account::ActiveModel {
-            id: NotSet,
-            balance: NotSet,
-        })
-        .on_conflict(
-            OnConflict::column(bank_account::Column::Id)
-                .do_nothing()
-                .to_owned(),
-        )
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to create bank_account"))?;
-        User::update(user::ActiveModel {
-            id: Set(user_id as i64),
-            mature: NotSet,
-            bank_account_id: Set(Some(r.id)),
-        })
-        .exec(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to update user"))?;
-        Ok(r)
+        self.upsert_user(user_id).await?;
+        let b = self.bank_account().create(vec![]).exec().await?;
+        self.user()
+            .update(
+                user::id::equals(user_id as i64),
+                vec![user::bank_account_id::set(Some(b.id))],
+            )
+            .exec()
+            .await?;
+        Ok(b)
     }
-    pub async fn delete_bank_account(&self, user_id: u64) -> Result<()> {
-        User::update(user::ActiveModel {
-            id: Set(user_id as i64),
-            mature: NotSet,
-            bank_account_id: Set(None),
-        })
-        .exec(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to update user"))?;
-        Ok(())
+    async fn delete_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
+        let b = self.get_bank_account(user_id).await?;
+        self.bank_account()
+            .delete(bank_account::id::equals(b.id))
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
     }
-    pub async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64> {
+    async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64> {
         let a = self.get_bank_account(user_id).await?;
         Ok(a.balance)
     }
-    pub async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<()> {
+    async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<()> {
         self.positive(amount)?;
-        if amount > self.get_bank_account(user_id).await?.balance {
+        if amount > self.get_bank_account_balance(user_id).await? {
             return Err(anyhow!("Account balance too low"));
         }
         Ok(())
     }
-    pub async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
+    async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
         self.positive(amount)?;
-        let mut a: bank_account::ActiveModel = self.get_bank_account(user_id).await?.into();
-        let new_bal = a
-            .balance
-            .take()
-            .unwrap()
-            .checked_add(amount)
-            .ok_or(anyhow!("overflow"))?;
-        a.balance = Set(new_bal);
-        let r = a
-            .update(&self.db)
+        let b = self.get_bank_account(user_id).await?;
+        self.bank_account()
+            .update(
+                bank_account::id::equals(b.id),
+                vec![bank_account::balance::increment(amount)],
+            )
+            .exec()
             .await
-            .map_err(|_| anyhow!("Failed to update balance"))?
-            .balance;
-        Ok(r)
+            .map(|b| b.balance)
+            .map_err(|q| anyhow!(q))
     }
-    pub async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
-        let mut a: bank_account::ActiveModel = self.get_bank_account(user_id).await?.into();
+    async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
+        self.positive(amount)?;
+        let b = self.get_bank_account(user_id).await?;
         self.has_bank_account_balance(user_id, amount).await?;
-        let new_bal = a
-            .balance
-            .take()
-            .unwrap()
-            .checked_sub(amount)
-            .ok_or(anyhow!("overflow"))?;
-        a.balance = Set(new_bal);
-        let r = a
-            .update(&self.db)
+        self.bank_account()
+            .update(
+                bank_account::id::equals(b.id),
+                vec![bank_account::balance::decrement(amount)],
+            )
+            .exec()
             .await
-            .map_err(|_| anyhow!("Failed to update balance"))?
-            .balance;
-        Ok(r)
+            .map(|b| b.balance)
+            .map_err(|q| anyhow!(q))
     }
-    pub async fn transfer_bank_account_balance(
+    async fn transfer_bank_account_balance(
         &self,
         from_user_id: u64,
         to_user_id: u64,
@@ -310,62 +320,62 @@ impl DBHandler {
         if from_user_id == to_user_id {
             return Err(anyhow!("Can't transfer to self"));
         }
-        let trx = self.begin().await?;
-        let r1 = self
-            .subtract_bank_account_balance(from_user_id, amount)
-            .await?;
-        let r2 = self.add_bank_account_balance(to_user_id, amount).await?;
-        self.commit(trx).await?;
+        let (r1, r2) = self
+            .do_trx(|tx_client| async move {
+                let r1 = tx_client
+                    .subtract_bank_account_balance(from_user_id, amount)
+                    .await?;
+                let r2 = tx_client
+                    .add_bank_account_balance(to_user_id, amount)
+                    .await?;
+                Ok((r1, r2))
+            })
+            .await
+            .map_err(|q| anyhow!(q))?;
         Ok((r1, r2))
     }
-    pub async fn create_task(
+    async fn create_task(
         &self,
         cron: String,
         cmd: String,
         arg: Option<String>,
         channel_id: u64,
-    ) -> Result<task::Model> {
-        let _ = self.create_channel(channel_id).await;
-        Task::insert(task::ActiveModel {
-            id: NotSet,
-            cron: Set(cron),
-            cmd: Set(cmd),
-            arg: Set(arg),
-            channel_id: Set(channel_id as i64),
-        })
-        .on_conflict(OnConflict::column(task::Column::Id).do_nothing().to_owned())
-        .exec_with_returning(&self.db)
-        .await
-        .map_err(|_| anyhow!("Failed to create task"))
-    }
-    pub async fn delete_task(&self, id: i32) -> Result<()> {
-        match Task::delete_by_id(id).exec(&self.db).await {
-            Ok(r) => {
-                if r.rows_affected == 0 {
-                    Err(anyhow!("No such ID"))
-                } else {
-                    Ok(())
-                }
-            }
-            Err(_) => Err(anyhow!("Failed to delete task")),
-        }
-    }
-    pub async fn get_all_tasks(&self) -> Result<Vec<task::Model>> {
-        Task::find()
-            .all(&self.db)
+    ) -> Result<task::Data> {
+        self.upsert_channel(channel_id).await?;
+        self.task()
+            .create(
+                cron,
+                cmd,
+                channel::id::equals(channel_id as i64),
+                vec![task::arg::set(arg)],
+            )
+            .exec()
             .await
-            .map_err(|_| anyhow!("Failed to get tasks"))
+            .map_err(|q| anyhow!(q))
     }
-    pub async fn get_all_tasks_in_channel(&self, id: u64) -> Result<Vec<task::Model>> {
-        let v = Channel::find_by_id(id as i64)
-            .find_with_related(Task)
-            .all(&self.db)
+    async fn delete_task(&self, id: i32) -> Result<task::Data> {
+        self.task()
+            .delete(task::id::equals(id))
+            .exec()
             .await
-            .map_err(|_| anyhow!("Database call failed"))?
-            .first()
-            .ok_or(anyhow!("No tasks in this channel"))?
-            .1
-            .clone();
-        Ok(v)
+            .map_err(|q| anyhow!(q))
+    }
+    async fn get_all_tasks(&self) -> Result<Vec<task::Data>> {
+        self.task()
+            .find_many(vec![])
+            .exec()
+            .await
+            .map_err(|q| anyhow!(q))
+    }
+    async fn get_all_tasks_in_channel(&self, id: u64) -> Result<Vec<task::Data>> {
+        self.channel()
+            .find_unique(channel::id::equals(id as i64))
+            .with(channel::task::fetch(vec![]))
+            .exec()
+            .await?
+            .ok_or_else(|| anyhow!("asdf"))?
+            .task()
+            .cloned()
+            .map_err(|q| anyhow!(q))
     }
 }

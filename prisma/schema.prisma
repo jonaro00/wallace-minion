@@ -1,0 +1,69 @@
+generator client {
+  provider = "cargo prisma"
+  output   = "../src/prisma.rs"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model bank_account {
+  id      Int    @id @default(autoincrement())
+  balance BigInt @default(0)
+  user    user?
+}
+
+model channel {
+  id   BigInt @id
+  task task[]
+}
+
+model guild {
+  id           BigInt       @id
+  default_name String?      @db.VarChar(100)
+  rn_object    rn_object[]
+  rn_subject   rn_subject[]
+}
+
+model lol_account {
+  id       Int    @id @default(autoincrement())
+  server   String @db.VarChar(10)
+  summoner String @db.VarChar(100)
+  user_id  BigInt
+  user     user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model rn_object {
+  guild_id BigInt
+  value    String @db.VarChar(45)
+  guild    guild  @relation(fields: [guild_id], references: [id], onDelete: Cascade)
+
+  @@id([guild_id, value])
+}
+
+model rn_subject {
+  guild_id BigInt
+  value    String @db.VarChar(45)
+  guild    guild  @relation(fields: [guild_id], references: [id], onDelete: Cascade)
+
+  @@id([guild_id, value])
+}
+
+model task {
+  id         Int     @id @default(autoincrement())
+  cron       String  @db.VarChar(255)
+  cmd        String  @db.VarChar(255)
+  arg        String? @db.VarChar(255)
+  channel_id BigInt
+  channel    channel @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+}
+
+model user {
+  id              BigInt        @id
+  bank_account_id Int?          @unique
+  mature          Boolean       @default(false)
+  lol_account     lol_account[]
+  bank_account    bank_account? @relation(fields: [bank_account_id], references: [id], onDelete: Cascade)
+}

@@ -13,6 +13,7 @@ use serenity::{
 };
 
 use crate::{
+    database::WallaceDBClient,
     discord::{get_db_handler, get_riot_client},
     services::riot_api::RiotAPIClients,
 };

@@ -10,6 +10,7 @@ use serenity::{
 };
 
 use crate::{
+    database::WallaceDBClient,
     discord::{get_db_handler, wallace_version},
     services::{bonk_user, set_server_name},
 };
@@ -241,6 +242,7 @@ async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[num_args(1)]
 #[description("Set what the default server name is.")]
+#[required_permissions("ADMINISTRATOR")]
 #[only_in(guilds)]
 async fn set(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
@@ -249,6 +251,7 @@ async fn set(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         args.quoted().current().unwrap().to_owned(),
     )
     .await?;
+    let _ = msg.react(ctx, '🫡').await;
     Ok(())
 }
 
