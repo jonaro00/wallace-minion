@@ -260,26 +260,15 @@ impl WallaceDBClient for PrismaClient {
             return Err(anyhow!("Account already open"));
         }
         self.upsert_user(user_id).await?;
-        let b = self
-            .bank_account()
-            .create(vec![])
+        self.bank_account()
+            .create(vec![bank_account::user_id::set(user_id as i64)])
             .exec()
             .await
-            .map_err(|q| self.log_error(q, "Failed to create bank account"))?;
-        self.user()
-            .update(
-                user::id::equals(user_id as i64),
-                vec![user::bank_account_id::set(Some(b.id))],
-            )
-            .exec()
-            .await
-            .map_err(|q| self.log_error(q, "Failed to update user"))?;
-        Ok(b)
+            .map_err(|q| self.log_error(q, "Failed to create bank account"))
     }
     async fn delete_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
-        let b = self.get_bank_account(user_id).await?;
         self.bank_account()
-            .delete(bank_account::id::equals(b.id))
+            .delete(bank_account::user_id::equals(user_id as i64))
             .exec()
             .await
             .map_err(|q| self.log_error(q, "Failed to delete bank account"))
@@ -297,10 +286,9 @@ impl WallaceDBClient for PrismaClient {
     }
     async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
         self.positive(amount)?;
-        let b = self.get_bank_account(user_id).await?;
         self.bank_account()
             .update(
-                bank_account::id::equals(b.id),
+                bank_account::user_id::equals(user_id as i64),
                 vec![bank_account::balance::increment(amount)],
             )
             .exec()
@@ -310,11 +298,10 @@ impl WallaceDBClient for PrismaClient {
     }
     async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
         self.positive(amount)?;
-        let b = self.get_bank_account(user_id).await?;
         self.has_bank_account_balance(user_id, amount).await?;
         self.bank_account()
             .update(
-                bank_account::id::equals(b.id),
+                bank_account::user_id::equals(user_id as i64),
                 vec![bank_account::balance::decrement(amount)],
             )
             .exec()

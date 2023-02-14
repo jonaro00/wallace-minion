@@ -10,9 +10,9 @@ datasource db {
 }
 
 model bank_account {
-  id      Int    @id @default(autoincrement())
+  user_id BigInt @id
   balance BigInt @default(0)
-  user    user?
+  user    user?  @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model channel {
@@ -61,9 +61,8 @@ model task {
 }
 
 model user {
-  id              BigInt        @id
-  bank_account_id Int?          @unique
-  mature          Boolean       @default(false)
-  lol_account     lol_account[]
-  bank_account    bank_account? @relation(fields: [bank_account_id], references: [id], onDelete: Cascade)
+  id           BigInt        @id
+  mature       Boolean       @default(false)
+  lol_account  lol_account[]
+  bank_account bank_account?
 }
