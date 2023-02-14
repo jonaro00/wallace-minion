@@ -2,6 +2,7 @@ pub mod cool_text;
 pub mod riot_api;
 pub mod seven_tv;
 
+use anyhow::anyhow;
 use chrono::Duration;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
@@ -11,6 +12,8 @@ use serenity::{
 };
 
 use cool_text::{to_cool_text, Font};
+
+use crate::{database::WallaceDBClient, discord::get_db_handler};
 
 pub async fn set_server_name(
     ctx: &Context,
@@ -91,4 +94,86 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) ->
         .say(ctx, BONK_EMOTES[rng.gen_range(0..BONK_EMOTES.len())])
         .await;
     Ok(())
+}
+
+pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
+    let gid = msg.guild_id.ok_or("Failed to get guild")?;
+    if let Err(e) = gid
+        .edit_member(ctx, UserId(uid), |m| m.enable_communication())
+        .await
+    {
+        let s = e.to_string();
+        let _ = msg
+            .channel_id
+            .say(
+                ctx,
+                if s == "Missing Permissions" {
+                    "That guy is too powerful... I can't do it... 😔".into()
+                } else {
+                    s
+                },
+            )
+            .await;
+        return Ok(());
+    };
+    let _ = msg
+        .channel_id
+        .say(
+            ctx,
+            format!(
+                "{}🔨🙂 <@{}> is free now.",
+                to_cool_text("UNBONK!", Font::BoldScript),
+                uid,
+            ),
+        )
+        .await;
+    Ok(())
+}
+
+pub async fn nickname_user(ctx: &Context, msg: &Message, uid: u64, nick: String) -> CommandResult {
+    let gid = msg.guild_id.ok_or("Failed to get guild")?;
+    if let Err(e) = gid
+        .edit_member(ctx, UserId(uid), |m| m.nickname(nick))
+        .await
+    {
+        let s = e.to_string();
+        let _ = msg
+            .channel_id
+            .say(
+                ctx,
+                if s == "Missing Permissions" {
+                    "That guy is too powerful... I can't do it... 😔".into()
+                } else {
+                    s
+                },
+            )
+            .await;
+        return Ok(());
+    };
+    let _ = msg.react(ctx, '🫡').await;
+    Ok(())
+}
+
+pub async fn do_payment(ctx: &Context, msg: &Message, amount: i64) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    if let Err(e) = db
+        .subtract_bank_account_balance(msg.author.id.0, amount)
+        .await
+    {
+        let _ = msg.channel_id.say(ctx, e).await;
+        Err(anyhow!("").into())
+    } else {
+        let _ = msg
+            .channel_id
+            .send_message(ctx, |m| {
+                m.add_embed(|e| {
+                    e.author(|a| {
+                        a.icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif")
+                            .name(format!("-{amount} 𝓚"))
+                    })
+                })
+            })
+            .await;
+        Ok(())
+    }
 }

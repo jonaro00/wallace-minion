@@ -28,9 +28,10 @@ use crate::{
         bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
         emote::EMOTE_GROUP,
-        general::{random_name, GENERAL_GROUP},
+        general::GENERAL_GROUP,
         riot::{lol_report, LOL_GROUP, TFT_GROUP},
         scheduling::SCHEDULING_GROUP,
+        spells::{random_name, SPELLS_GROUP},
     },
     database::WallaceDBClient,
     prisma::{new_client_with_url, PrismaClient},
@@ -78,8 +79,9 @@ pub async fn build_bot(
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
         .group(&GENERAL_GROUP)
-        .group(&EMOTE_GROUP)
         .group(&BANK_GROUP)
+        .group(&SPELLS_GROUP)
+        .group(&EMOTE_GROUP)
         .group(&COOLTEXT_GROUP)
         .group(&SCHEDULING_GROUP)
         .group(&LOL_GROUP)
@@ -329,7 +331,8 @@ async fn schedule_loop(ctx: Context) {
                                     None => break,
                                 };
                                 if let Ok((s, o)) = db.get_guild_random_names(g.id.0).await {
-                                    let _ = set_server_name(&ctx, g, None, &random_name(s, o)).await;
+                                    let _ =
+                                        set_server_name(&ctx, g, None, &random_name(s, o)).await;
                                 }
                             }
                             ScheduleTask::DefaultName => {
@@ -369,15 +372,3 @@ async fn schedule_loop(ctx: Context) {
         tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
-
-// async fn weekly_lol_report(ctx: &Context) {
-//     let m: WeeklyReportMembers = match JsonStore::new(WEEKLY_REPORT_MEMBERS_FILE).read() {
-//         Ok(m) => m,
-//         Err(_) => {
-//             return;
-//         }
-//     };
-//     for cid in m.keys() {
-//         let _ = lol_report(ctx, ChannelId(*cid)).await;
-//     }
-// }

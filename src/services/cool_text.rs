@@ -21,6 +21,7 @@ fn cool_text_bases(font: Font) -> Bases {
     }
 }
 
+#[allow(clippy::unnecessary_unwrap)]
 pub fn to_cool_text(text: &str, font: Font) -> String {
     let (upper, lower, numeric) = cool_text_bases(font);
     text.chars()

@@ -115,7 +115,10 @@ impl WallaceDBClient for PrismaClient {
         self.guild()
             .upsert(
                 guild::id::equals(id as i64),
-                (id as i64, vec![guild::default_name::set(Some(value.clone()))]),
+                (
+                    id as i64,
+                    vec![guild::default_name::set(Some(value.clone()))],
+                ),
                 vec![guild::default_name::set(Some(value))],
             )
             .exec()
