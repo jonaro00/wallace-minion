@@ -15,136 +15,8 @@ use crate::{
     services::{bonk_user, set_server_name},
 };
 
-pub const GUILD_DEFAULT_NAME: &str = "Tisdags Gaming Klubb";
-
-const GUILD_NAME_SUBJECTS: &[&str] = &[
-    "Tisdag",
-    "Johan",
-    "Matteus",
-    "Daniel",
-    "Gabriel",
-    "Mattias",
-    "Olle",
-    "Wilmer",
-    "Vincent",
-    "Habibi",
-    "NallePuh",
-    "Ior",
-    "Bompadraken",
-    "GrodanBoll",
-    "Anki",
-    "Pettson",
-    "FågelTurken",
-    "Pingu",
-    "Höjdarna",
-    "Muminpappa",
-    "LillaMy",
-    "Lipton",
-    "Gordon",
-    "Wallace",
-    "Gromit",
-    "Berit",
-    "Herbert",
-    "KorvIngvar",
-    "Knugen",
-    "EggMan",
-    "Trump",
-    "Obama",
-    "Steffe",
-    "Svergie",
-    "MupDef",
-    "Kina",
-    "NordKorea",
-    "GustavVasa",
-    "Trollface",
-    "Pepe",
-    "MackaPacka",
-    "PostisPer",
-    "StoraMaskiner",
-    "Svampbob",
-    "Perry",
-    "DrDoofenshmirtz",
-    "PostNord",
-    "ICA",
-    "MrBeast",
-    "TheBausffs",
-    "Gragas",
-    "Rammus",
-    "Notch",
-    "EdwardBlom",
-    "LeifGWPersson",
-    "Mauri",
-    "ElonMusk",
-    "JohnCena",
-    "MrBean",
-];
-const GUILD_NAME_OBJECTS: &[&str] = &[
-    "Gaming",
-    "Minecraft",
-    "Fortnite",
-    "LoL",
-    "TFT",
-    "Gartic",
-    "AmongUs",
-    "Terraria",
-    "MarioKart",
-    "SmashBros",
-    "Roblox",
-    "Pokémon",
-    "Magic",
-    "LEGO",
-    "Schack",
-    "Agario",
-    "Ost",
-    "Korv",
-    "Blodpudding",
-    "Potatisbulle",
-    "Whiskey",
-    "Chips",
-    "Ägg",
-    "BingChilling",
-    "Nyponsoppa",
-    "Grönsaks",
-    "LivsGlädje",
-    "👺",
-    "Anime",
-    "Kpop",
-    "Musik",
-    "Bok",
-    "Golf",
-    "Fotbolls",
-    "Matematik",
-    "Programmerings",
-    "Politik",
-    "Plugg",
-    "Kubb",
-    "Nörd",
-    "Fika",
-    "Hatt",
-    "Pingvin",
-    "Välfärds",
-    "Ekonomi",
-    "Ondskefulla",
-    "Hemliga",
-    "Trädgårds",
-    "Pepega",
-    "Shilling",
-    "BOMBA",
-    "Boomer",
-];
-
 #[group]
-#[commands(
-    ping,
-    version,
-    speak,
-    riddle,
-    delete,
-    bonk,
-    defaultname,
-    randomname,
-    list
-)]
+#[commands(ping, version, speak, riddle, delete, bonk, defaultname, randomname)]
 #[description("Test")]
 struct General;
 
@@ -196,7 +68,7 @@ async fn riddle(ctx: &Context, msg: &Message) -> CommandResult {
         .send_message(ctx, |m| {
             m.add_embed(|e| {
                 e.author(|a| a.name("My hammer says:"))
-                    .title("What did the chicken say to the egg?")
+                    .title("What did the chicken say to the egg? (Click to find out!)")
                     .url("https://youtu.be/dQw4w9WgXcQ")
                     .colour((200, 255, 33))
             })
@@ -236,7 +108,14 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[description("Set the server name to the default.")]
 #[only_in(guilds)]
 async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
-    set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), GUILD_DEFAULT_NAME).await
+    let db = get_db_handler(ctx).await;
+    set_server_name(
+        ctx,
+        msg.guild(ctx).unwrap(),
+        Some(msg),
+        &db.get_guild_default_name(msg.guild_id.unwrap().0).await?,
+    )
+    .await
 }
 
 #[command]
@@ -256,11 +135,14 @@ async fn set(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 #[command]
+#[sub_commands(list, add_subject, add_object)]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
 #[description("Set the server name to a random one.")]
 async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
-    set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name()).await
+    let db = get_db_handler(ctx).await;
+    let (s, o) = db.get_guild_random_names(msg.guild_id.unwrap().0).await?;
+    set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name(s, o)).await
 }
 
 #[command]
@@ -272,19 +154,57 @@ async fn list(ctx: &Context, msg: &Message) -> CommandResult {
         .channel_id
         .say(
             ctx,
-            format!(
-                "{:?}",
-                db.get_guild_random_names(msg.guild_id.unwrap().0).await?
-            ),
+            db.get_guild_random_names(msg.guild_id.unwrap().0)
+                .await
+                .map(|(s, o)| format!("Subjects: `{}`\nObjects: `{}`", s.join(", "), o.join(", ")))
+                .unwrap_or_else(|e| e.to_string()),
         )
         .await;
     Ok(())
 }
 
-pub fn random_name() -> String {
+#[command]
+#[num_args(1)]
+#[only_in(guilds)]
+#[required_permissions("ADMINISTRATOR")]
+async fn add_subject(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    db.add_guild_random_name_subject(
+        msg.guild_id.unwrap().0,
+        args.quoted().current().unwrap().to_owned(),
+    )
+    .await?;
+    let _ = msg.channel_id.say(ctx, "Added").await;
+    Ok(())
+}
+
+#[command]
+#[num_args(1)]
+#[only_in(guilds)]
+#[required_permissions("ADMINISTRATOR")]
+async fn add_object(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let db = get_db_handler(ctx).await;
+    db.add_guild_random_name_object(
+        msg.guild_id.unwrap().0,
+        args.quoted().current().unwrap().to_owned(),
+    )
+    .await?;
+    let _ = msg.channel_id.say(ctx, "Added").await;
+    Ok(())
+}
+
+pub fn random_name(subs: Vec<String>, objs: Vec<String>) -> String {
     let mut rng: StdRng = SeedableRng::from_entropy();
-    let sub = GUILD_NAME_SUBJECTS[rng.gen_range(0..GUILD_NAME_SUBJECTS.len())];
-    let s = sub.ends_with(|c| c == 's' || c == 'S');
-    let obj = GUILD_NAME_OBJECTS[rng.gen_range(0..GUILD_NAME_OBJECTS.len())];
+    let sub = if subs.is_empty() {
+        ""
+    } else {
+        &subs[rng.gen_range(0..subs.len())]
+    };
+    let s = sub.ends_with(|c: char| c.to_ascii_lowercase() == 's');
+    let obj = if objs.is_empty() {
+        ""
+    } else {
+        &objs[rng.gen_range(0..objs.len())]
+    };
     format!("{sub}{} {obj} Klubb", if s { "" } else { "s" })
 }

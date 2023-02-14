@@ -1,3 +1,10 @@
+-- Delete orphan bank accounts
+DELETE FROM "bank_account" b
+WHERE NOT EXISTS (
+  SELECT FROM "user" u
+  WHERE u.bank_account_id = b.id
+);
+
 -- Add new col
 ALTER TABLE "bank_account"
 ADD COLUMN "user_id" BIGINT;
@@ -12,7 +19,7 @@ UPDATE "bank_account" SET ("user_id") = (
 ALTER TABLE "user" DROP CONSTRAINT "user_bank_account_id_fkey";
 
 -- DropIndex
-DROP INDEX "user_bank_account_id_key";
+ALTER TABLE "user" DROP CONSTRAINT "user_bank_account_id_key";
 
 -- AlterTable
 ALTER TABLE "bank_account" DROP CONSTRAINT "bank_account_pkey",

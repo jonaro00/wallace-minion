@@ -30,6 +30,7 @@ pub trait WallaceDBClient {
         amount: i64,
     ) -> Result<(i64, i64)>;
     async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Data>;
+    async fn get_guild_default_name(&self, id: u64) -> Result<String>;
     async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)>;
     async fn add_guild_random_name_subject(
         &self,
@@ -114,12 +115,22 @@ impl WallaceDBClient for PrismaClient {
         self.guild()
             .upsert(
                 guild::id::equals(id as i64),
-                (id as i64, vec![]),
+                (id as i64, vec![guild::default_name::set(Some(value.clone()))]),
                 vec![guild::default_name::set(Some(value))],
             )
             .exec()
             .await
             .map_err(|q| self.log_error(q, "Failed to update guild"))
+    }
+    async fn get_guild_default_name(&self, id: u64) -> Result<String> {
+        self.guild()
+            .find_unique(guild::id::equals(id as i64))
+            .exec()
+            .await
+            .map_err(|q| self.log_error(q, "Failed to get guild"))?
+            .ok_or_else(|| anyhow!("Guild not found"))?
+            .default_name
+            .ok_or_else(|| anyhow!("No default name set"))
     }
     async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
         let r = self

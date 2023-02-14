@@ -28,7 +28,7 @@ use crate::{
         bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
         emote::EMOTE_GROUP,
-        general::{random_name, GENERAL_GROUP, GUILD_DEFAULT_NAME},
+        general::{random_name, GENERAL_GROUP},
         riot::{lol_report, LOL_GROUP, TFT_GROUP},
         scheduling::SCHEDULING_GROUP,
     },
@@ -328,7 +328,9 @@ async fn schedule_loop(ctx: Context) {
                                     Some(g) => g,
                                     None => break,
                                 };
-                                let _ = set_server_name(&ctx, g, None, &random_name()).await;
+                                if let Ok((s, o)) = db.get_guild_random_names(g.id.0).await {
+                                    let _ = set_server_name(&ctx, g, None, &random_name(s, o)).await;
+                                }
                             }
                             ScheduleTask::DefaultName => {
                                 let g = match ctx
@@ -340,7 +342,9 @@ async fn schedule_loop(ctx: Context) {
                                     Some(g) => g,
                                     None => break,
                                 };
-                                let _ = set_server_name(&ctx, g, None, GUILD_DEFAULT_NAME).await;
+                                if let Ok(s) = db.get_guild_default_name(g.id.0).await {
+                                    let _ = set_server_name(&ctx, g, None, &s).await;
+                                }
                             }
                             ScheduleTask::LolWeekly => {
                                 let channel = ChannelId(t.channel_id as u64)
