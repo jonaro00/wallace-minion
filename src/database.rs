@@ -1,6 +1,6 @@
 use std::{future::Future, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
 
 use crate::prisma::*;
@@ -12,6 +12,10 @@ pub trait WallaceDBClient {
         T: Send,
         FFut: Future<Output = Result<T>> + Send,
         F: FnOnce(Arc<PrismaClient>) -> FFut + Send;
+    fn log_error(&self, err: impl std::error::Error, msg: &'static str) -> Error {
+        println!("{err}");
+        anyhow!(msg)
+    }
     fn positive(&self, amount: i64) -> Result<()> {
         if !amount.is_positive() {
             return Err(anyhow!("Non-positive amount"));
@@ -38,7 +42,6 @@ pub trait WallaceDBClient {
     async fn get_user_mature(&self, id: u64) -> Result<bool>;
     async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Data>;
     async fn get_all_users(&self) -> Result<Vec<user::Data>>;
-    async fn upsert_channel(&self, id: u64) -> Result<channel::Data>;
     async fn create_lol_account(
         &self,
         server: String,
@@ -58,6 +61,7 @@ pub trait WallaceDBClient {
     async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<()>;
     async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64>;
     async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64>;
+    async fn upsert_channel(&self, id: u64) -> Result<channel::Data>;
     async fn create_task(
         &self,
         cron: String,
@@ -104,7 +108,7 @@ impl WallaceDBClient for PrismaClient {
             .upsert(guild::id::equals(id as i64), (id as i64, vec![]), vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to update guild"))
     }
     async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Data> {
         self.guild()
@@ -115,7 +119,7 @@ impl WallaceDBClient for PrismaClient {
             )
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to update guild"))
     }
     async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
         let r = self
@@ -124,10 +128,15 @@ impl WallaceDBClient for PrismaClient {
             .with(guild::rn_subject::fetch(vec![]))
             .with(guild::rn_object::fetch(vec![]))
             .exec()
-            .await?
+            .await
+            .map_err(|q| self.log_error(q, "Failed to get guild"))?
             .ok_or_else(|| anyhow!("Guild not found"))?;
-        let subs = r.rn_subject()?;
-        let objs = r.rn_object()?;
+        let subs = r
+            .rn_subject()
+            .map_err(|r| self.log_error(r, "Failed to fetch subjects"))?;
+        let objs = r
+            .rn_object()
+            .map_err(|r| self.log_error(r, "Failed to fetch objects"))?;
         Ok((
             subs.iter().map(|s| s.value.clone()).collect(),
             objs.iter().map(|s| s.value.clone()).collect(),
@@ -143,7 +152,7 @@ impl WallaceDBClient for PrismaClient {
             .create(value, guild::id::equals(id as i64), vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to create subject"))
     }
     async fn add_guild_random_name_object(
         &self,
@@ -155,21 +164,21 @@ impl WallaceDBClient for PrismaClient {
             .create(value, guild::id::equals(id as i64), vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to create object"))
     }
     async fn upsert_user(&self, id: u64) -> Result<user::Data> {
         self.user()
             .upsert(user::id::equals(id as i64), (id as i64, vec![]), vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to update user"))
     }
     async fn get_user_mature(&self, id: u64) -> Result<bool> {
         self.user()
             .find_unique(user::id::equals(id as i64))
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to get user"))
             .and_then(|u| u.ok_or_else(|| anyhow!("User not registered in Wallace")))
             .map(|u| u.mature)
     }
@@ -178,21 +187,14 @@ impl WallaceDBClient for PrismaClient {
             .update(user::id::equals(id as i64), vec![user::mature::set(mature)])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to update user"))
     }
     async fn get_all_users(&self) -> Result<Vec<user::Data>> {
         self.user()
             .find_many(vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
-    }
-    async fn upsert_channel(&self, id: u64) -> Result<channel::Data> {
-        self.channel()
-            .upsert(channel::id::equals(id as i64), (id as i64, vec![]), vec![])
-            .exec()
-            .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to get users"))
     }
     async fn create_lol_account(
         &self,
@@ -205,7 +207,7 @@ impl WallaceDBClient for PrismaClient {
             .create(server, summoner, user::id::equals(user_id as i64), vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to create LoL account"))
     }
     async fn delete_lol_account(
         &self,
@@ -219,35 +221,38 @@ impl WallaceDBClient for PrismaClient {
                 lol_account::summoner::equals(summoner),
             ])
             .exec()
-            .await?
+            .await
+            .map_err(|q| self.log_error(q, "Failed to get account"))?
             .ok_or_else(|| anyhow!("LoL account not found"))?;
         self.lol_account()
             .delete(lol_account::id::equals(a.id))
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to delete LoL account"))
     }
     async fn get_all_lol_accounts_in_user(&self, id: u64) -> Result<Vec<lol_account::Data>> {
         self.user()
             .find_unique(user::id::equals(id as i64))
             .with(user::lol_account::fetch(vec![]))
             .exec()
-            .await?
-            .ok_or_else(|| anyhow!("asdf"))?
+            .await
+            .map_err(|q| self.log_error(q, "Failed to get user"))?
+            .ok_or_else(|| anyhow!("User not found"))?
             .lol_account()
             .cloned()
-            .map_err(|q| anyhow!(q))
+            .map_err(|r| self.log_error(r, "Failed to fetch LoL accounts"))
     }
     async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
         self.user()
             .find_unique(user::id::equals(user_id as i64))
             .with(user::bank_account::fetch())
             .exec()
-            .await?
-            .ok_or_else(|| anyhow!("asdf"))?
+            .await
+            .map_err(|q| self.log_error(q, "Failed to get user"))?
+            .ok_or_else(|| anyhow!("User not found"))?
             .bank_account()
-            .map_err(|q| anyhow!(q))?
-            .ok_or_else(|| anyhow!("asdf"))
+            .map_err(|r| self.log_error(r, "Failed to fetch bank account"))?
+            .ok_or_else(|| anyhow!("Bank account not found"))
             .cloned()
     }
     async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
@@ -255,14 +260,20 @@ impl WallaceDBClient for PrismaClient {
             return Err(anyhow!("Account already open"));
         }
         self.upsert_user(user_id).await?;
-        let b = self.bank_account().create(vec![]).exec().await?;
+        let b = self
+            .bank_account()
+            .create(vec![])
+            .exec()
+            .await
+            .map_err(|q| self.log_error(q, "Failed to create bank account"))?;
         self.user()
             .update(
                 user::id::equals(user_id as i64),
                 vec![user::bank_account_id::set(Some(b.id))],
             )
             .exec()
-            .await?;
+            .await
+            .map_err(|q| self.log_error(q, "Failed to update user"))?;
         Ok(b)
     }
     async fn delete_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
@@ -271,7 +282,7 @@ impl WallaceDBClient for PrismaClient {
             .delete(bank_account::id::equals(b.id))
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to delete bank account"))
     }
     async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64> {
         let a = self.get_bank_account(user_id).await?;
@@ -295,7 +306,7 @@ impl WallaceDBClient for PrismaClient {
             .exec()
             .await
             .map(|b| b.balance)
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to update balance"))
     }
     async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
         self.positive(amount)?;
@@ -309,7 +320,7 @@ impl WallaceDBClient for PrismaClient {
             .exec()
             .await
             .map(|b| b.balance)
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to update balance"))
     }
     async fn transfer_bank_account_balance(
         &self,
@@ -330,9 +341,15 @@ impl WallaceDBClient for PrismaClient {
                     .await?;
                 Ok((r1, r2))
             })
-            .await
-            .map_err(|q| anyhow!(q))?;
+            .await?;
         Ok((r1, r2))
+    }
+    async fn upsert_channel(&self, id: u64) -> Result<channel::Data> {
+        self.channel()
+            .upsert(channel::id::equals(id as i64), (id as i64, vec![]), vec![])
+            .exec()
+            .await
+            .map_err(|q| self.log_error(q, "Failed to update channel"))
     }
     async fn create_task(
         &self,
@@ -351,31 +368,32 @@ impl WallaceDBClient for PrismaClient {
             )
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to create task"))
     }
     async fn delete_task(&self, id: i32) -> Result<task::Data> {
         self.task()
             .delete(task::id::equals(id))
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to delete task"))
     }
     async fn get_all_tasks(&self) -> Result<Vec<task::Data>> {
         self.task()
             .find_many(vec![])
             .exec()
             .await
-            .map_err(|q| anyhow!(q))
+            .map_err(|q| self.log_error(q, "Failed to get tasks"))
     }
     async fn get_all_tasks_in_channel(&self, id: u64) -> Result<Vec<task::Data>> {
         self.channel()
             .find_unique(channel::id::equals(id as i64))
             .with(channel::task::fetch(vec![]))
             .exec()
-            .await?
-            .ok_or_else(|| anyhow!("asdf"))?
+            .await
+            .map_err(|q| self.log_error(q, "Failed to get channel"))?
+            .ok_or_else(|| anyhow!("Channel not found"))?
             .task()
             .cloned()
-            .map_err(|q| anyhow!(q))
+            .map_err(|r| self.log_error(r, "Failed to fetch tasks"))
     }
 }
