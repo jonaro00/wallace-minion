@@ -76,22 +76,21 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) ->
             .await;
         return Ok(());
     };
-    let _ = msg
-        .channel_id
-        .say(
-            ctx,
-            format!(
-                "{}🔨🙂 Timed out <@{}> for {} seconds.",
-                to_cool_text("BONK!", Font::BoldScript),
-                uid,
-                duration,
-            ),
-        )
-        .await;
     let mut rng: StdRng = SeedableRng::from_entropy();
+    let tn = gid
+        .member(ctx, uid)
+        .await
+        .map(|m| m.nick.unwrap_or(m.user.name))
+        .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id
-        .say(ctx, BONK_EMOTES[rng.gen_range(0..BONK_EMOTES.len())])
+        .send_message(ctx, |m| {
+            m.add_embed(|e| {
+                e.author(|a| a.name(format!("{}🔨🙂", to_cool_text("BONK!", Font::BoldScript))))
+                    .title(format!("Timed out {tn} for {duration} seconds."))
+                    .thumbnail(BONK_EMOTES[rng.gen_range(0..BONK_EMOTES.len())])
+            })
+        })
         .await;
     Ok(())
 }
@@ -116,16 +115,20 @@ pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResul
             .await;
         return Ok(());
     };
+    let tn = gid
+        .member(ctx, uid)
+        .await
+        .map(|m| m.nick.unwrap_or(m.user.name))
+        .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id
-        .say(
-            ctx,
-            format!(
-                "{}🔨🙂 <@{}> is free now.",
-                to_cool_text("UNBONK!", Font::BoldScript),
-                uid,
-            ),
-        )
+        .send_message(ctx, |m| {
+            m.add_embed(|e| {
+                e.author(|a| a.name(format!("{}🔨🙂", to_cool_text("UNBONK!", Font::BoldScript))))
+                    .title(format!("{tn} is free now."))
+                    .thumbnail("https://cdn.7tv.app/emote/60ed8bf39dd7fe3b46c62e0f/2x.gif")
+            })
+        })
         .await;
     Ok(())
 }

@@ -18,7 +18,16 @@ use crate::{
 };
 
 #[group]
-#[commands(bonk, gamba, unbonk, nickname, defaultname, servername, randomname)]
+#[commands(
+    bonk,
+    gamba,
+    hammer,
+    unbonk,
+    nickname,
+    defaultname,
+    servername,
+    randomname
+)]
 struct Spells;
 
 pub enum SpellPrice {
@@ -35,7 +44,7 @@ pub static SHOPPABLE_SPELLS_AND_PRICES: &[(&Command, SpellPrice)] = &[
 ];
 
 #[command]
-#[aliases(hammer, timeout)]
+#[aliases(timeout)]
 #[min_args(1)]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
@@ -54,7 +63,7 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[max_args(3)]
 #[description(
     "Summon mods in chat to start the GAMBA. Tag a user and they might get bonked. Or you.
-    A higher size increases bonk time, but reduces chance of success.
+    A larger size increases bonk time, but reduces chance of success.
     A higher bet increases the chance of success."
 )]
 #[usage("[S|M|L|XL|XXL] [amount] <user>")]
@@ -63,19 +72,20 @@ async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[example("XXL 30 @Yxaria")]
 async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let a = args.current().unwrap();
+    let default: (f32, &str, u32) = (1.00, "S", 60);
     let stats: Option<(f32, &str, u32)> = match a.to_ascii_uppercase().as_str() {
-        "S" => Some((1.00, "S", 60)),
-        "M" => Some((0.92, "M", 180)),
-        "L" => Some((0.85, "L", 600)),
-        "XL" => Some((0.75, "XL", 1800)),
-        "XXL" => Some((0.54, "XXL", 3600)),
+        "S" => Some(default),
+        "M" => Some((0.92, "M", 240)),
+        "L" => Some((0.85, "L", 900)),
+        "XL" => Some((0.75, "XL", 3600)),
+        "XXL" => Some((0.54, "XXL", 4 * 3600)),
         _ => None,
     };
     let (modifier, size, duration) = if let Some((m, s, d)) = stats {
         args.advance();
         (m, s, d)
     } else {
-        (1.00, "S", 60)
+        default
     };
     let a = args.current().ok_or("Not enough arguments")?;
     let amount: i64 = match a.parse() {
@@ -118,6 +128,18 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     };
     bonk_user(ctx, msg, who, duration).await?;
     Ok(())
+}
+
+#[command]
+#[num_args(1)]
+#[only_in(guilds)]
+#[description("Bonk a user. Requires a **Wallace Hammer**.")]
+async fn hammer(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    let _ = msg.channel_id.say(ctx, "You have no hammer 😠").await;
+    return Ok(());
+    // let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
+    // bonk_user(ctx, msg, uid, 60).await?;
+    // Ok(())
 }
 
 pub const UNBONK_COST: i64 = 2;
@@ -237,11 +259,11 @@ async fn list(ctx: &Context, msg: &Message) -> CommandResult {
 #[num_args(1)]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
-async fn add_subject(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn add_subject(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     db.add_guild_random_name_subject(
         msg.guild_id.unwrap().0,
-        args.quoted().current().unwrap().to_owned(),
+        args.rest().to_owned(),
     )
     .await?;
     let _ = msg.channel_id.say(ctx, "Added").await;
@@ -252,11 +274,11 @@ async fn add_subject(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 #[num_args(1)]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
-async fn add_object(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn add_object(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     db.add_guild_random_name_object(
         msg.guild_id.unwrap().0,
-        args.quoted().current().unwrap().to_owned(),
+        args.rest().to_owned(),
     )
     .await?;
     let _ = msg.channel_id.say(ctx, "Added").await;
@@ -270,11 +292,15 @@ pub fn random_name(subs: Vec<String>, objs: Vec<String>) -> String {
     } else {
         &subs[rng.gen_range(0..subs.len())]
     };
-    let s = sub.ends_with(|c: char| c.to_ascii_lowercase() == 's');
+    let s = if sub.ends_with(|c: char| c.to_ascii_lowercase() == 's') {
+        ""
+    } else {
+        "s"
+    };
     let obj = if objs.is_empty() {
         ""
     } else {
         &objs[rng.gen_range(0..objs.len())]
     };
-    format!("{sub}{} {obj} Klubb", if s { "" } else { "s" })
+    format!("{sub}{s} {obj} Klubb")
 }
