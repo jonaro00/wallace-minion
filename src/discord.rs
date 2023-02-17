@@ -50,6 +50,8 @@ pub fn wallace_version() -> String {
     )
 }
 
+pub const PREFIX: &str = "!";
+
 pub async fn build_bot(
     discord_token: String,
     riot_token_lol: String,
@@ -74,7 +76,7 @@ pub async fn build_bot(
     };
 
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!").owners(owners))
+        .configure(|c| c.prefix(PREFIX).owners(owners))
         .unrecognised_command(unknown_command_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)

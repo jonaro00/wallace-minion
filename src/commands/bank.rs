@@ -10,10 +10,14 @@ use serenity::{
     utils::parse_username,
 };
 
-use crate::{database::WallaceDBClient, discord::get_db_handler};
+use super::spells::{SpellPrice, SHOPPABLE_SPELLS_AND_PRICES};
+use crate::{
+    database::WallaceDBClient,
+    discord::{get_db_handler, PREFIX},
+};
 
 #[group]
-#[commands(account, coinflip, give, mint, set_mature)]
+#[commands(account, shop, coinflip, give, mint, set_mature)]
 struct Bank;
 
 #[command]
@@ -111,6 +115,50 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
             })
         })
         .await?;
+    Ok(())
+}
+
+#[command]
+#[description("Show available buffs, items, and spells to purchase.")]
+async fn shop(ctx: &Context, msg: &Message) -> CommandResult {
+    let _ = msg
+        .channel_id
+        .send_message(ctx, |m| {
+            m.add_embed(|e| {
+                e.title("\\>> 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 SHOP <<")
+                    .thumbnail("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif")
+                    .field("Buffs", "", false)
+                    .field("Items", "", false)
+                    .field(
+                        "Spells",
+                        SHOPPABLE_SPELLS_AND_PRICES
+                            .iter()
+                            .map(|(c, p)| {
+                                format!(
+                                    "**{}{}** `{}{}` {}",
+                                    match p {
+                                        SpellPrice::Free => "Free".into(),
+                                        SpellPrice::Cost(q) => q.to_string(),
+                                        SpellPrice::AtLeast(q) => format!("{q}+"),
+                                    },
+                                    if let SpellPrice::Free = p {
+                                        ""
+                                    } else {
+                                        " 𝓚"
+                                    },
+                                    PREFIX,
+                                    c.options.names[0],
+                                    c.options.desc.unwrap_or_default()
+                                )
+                            })
+                            .collect::<Vec<String>>()
+                            .as_slice()
+                            .join("\n"),
+                        false,
+                    )
+            })
+        })
+        .await;
     Ok(())
 }
 

@@ -5,7 +5,7 @@ use serenity::{
     client::Context,
     framework::standard::{
         macros::{command, group},
-        Args, CommandResult,
+        Args, Command, CommandResult,
     },
     model::prelude::Message,
     utils::parse_username,
@@ -20,6 +20,19 @@ use crate::{
 #[group]
 #[commands(bonk, gamba, unbonk, nickname, defaultname, servername, randomname)]
 struct Spells;
+
+pub enum SpellPrice {
+    Free,
+    Cost(i64),
+    AtLeast(i64),
+}
+pub static SHOPPABLE_SPELLS_AND_PRICES: &[(&Command, SpellPrice)] = &[
+    (&GAMBA_COMMAND, SpellPrice::AtLeast(1)),
+    (&UNBONK_COMMAND, SpellPrice::Cost(UNBONK_COST)),
+    (&NICKNAME_COMMAND, SpellPrice::Cost(NICKNAME_COST)),
+    (&DEFAULTNAME_COMMAND, SpellPrice::Free),
+    (&SERVERNAME_COMMAND, SpellPrice::Cost(SERVERNAME_COST)),
+];
 
 #[command]
 #[aliases(hammer, timeout)]
@@ -82,7 +95,7 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     }
 
     // m * 35 * a^(1/3)-11 bounded to [1, 100]
-    let chance = 100.min(1.max((modifier * 35.0 * (amount as f32).powf(1.0 / 3.0) - 11.0) as u32));
+    let chance = ((modifier * 35.0 * (amount as f32).powf(1.0 / 3.0) - 11.0) as u32).clamp(1, 100);
     let _ = msg
         .channel_id
         .send_message(ctx, |m| {
@@ -107,31 +120,41 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     Ok(())
 }
 
+pub const UNBONK_COST: i64 = 2;
 #[command]
 #[aliases(unhammer, untimeout)]
 #[num_args(1)]
 #[only_in(guilds)]
 #[description("Unbonk a user.")]
+#[usage("<user>")]
+#[example("@Yxaria")]
 async fn unbonk(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    if do_payment(ctx, msg, 2).await.is_err() {
+    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
+    if do_payment(ctx, msg, UNBONK_COST).await.is_err() {
         return Ok(());
     }
-    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
     unbonk_user(ctx, msg, uid).await
 }
 
+pub const NICKNAME_COST: i64 = 1;
 #[command]
 #[aliases(nick)]
 #[num_args(2)]
 #[only_in(guilds)]
 #[description("Set the server nickname of the target user.")]
+#[usage("<user> <name>")]
+#[example("@Yxaria Nick 🐒 Name")]
 async fn nickname(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    if do_payment(ctx, msg, 1).await.is_err() {
-        return Ok(());
-    }
     let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
     args.advance();
-    let nick = args.quoted().current().unwrap();
+    let nick = args.rest();
+    if nick.chars().count() > 32 {
+        let _ = msg.channel_id.say(ctx, "Nickname too long").await;
+        return Ok(());
+    }
+    if do_payment(ctx, msg, NICKNAME_COST).await.is_err() {
+        return Ok(());
+    }
     nickname_user(ctx, msg, uid, nick.to_owned()).await
 }
 
@@ -166,15 +189,18 @@ async fn set(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     Ok(())
 }
 
+pub const SERVERNAME_COST: i64 = 3;
 #[command]
 #[num_args(1)]
 #[only_in(guilds)]
 #[description("Set the server name.")]
-async fn servername(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    if do_payment(ctx, msg, 3).await.is_err() {
+#[usage("<name>")]
+#[example("Cool Chicken Club")]
+async fn servername(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let name = args.rest();
+    if do_payment(ctx, msg, SERVERNAME_COST).await.is_err() {
         return Ok(());
     }
-    let name = args.quoted().current().unwrap();
     set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), name).await
 }
 
