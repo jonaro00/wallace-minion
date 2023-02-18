@@ -161,7 +161,7 @@ async fn unbonk(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 pub const NICKNAME_COST: i64 = 1;
 #[command]
 #[aliases(nick)]
-#[num_args(2)]
+#[min_args(2)]
 #[only_in(guilds)]
 #[description("Set the server nickname of the target user.")]
 #[usage("<user> <name>")]
