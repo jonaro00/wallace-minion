@@ -1,7 +1,9 @@
-use std::collections::HashMap;
-use std::env;
-use std::sync::Arc;
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    str::FromStr,
+    sync::Arc,
+};
 
 use chrono::Utc;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -59,7 +61,7 @@ pub async fn build_bot(
     db_url: String,
 ) -> DiscordClient {
     let http = Http::new(&discord_token);
-    let (owners, _bot_id) = match http.get_current_application_info().await {
+    let (owners, bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
             let mut owners = HashSet::new();
             if let Some(team) = info.team {
@@ -76,7 +78,12 @@ pub async fn build_bot(
     };
 
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix(PREFIX).owners(owners))
+        .configure(|c| {
+            c.prefix(PREFIX)
+                .owners(owners)
+                .case_insensitivity(true)
+                .on_mention(Some(bot_id))
+        })
         .unrecognised_command(unknown_command_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
@@ -145,6 +152,19 @@ pub async fn get_db_handler(ctx: &Context) -> Arc<PrismaClient> {
         .clone()
 }
 
+use serenity::builder::CreateApplicationCommand;
+use serenity::model::application::command::Command;
+use serenity::model::application::interaction::{Interaction, InteractionResponseType};
+use serenity::model::prelude::interaction::application_command::CommandDataOption;
+
+pub fn run(_options: &[CommandDataOption]) -> String {
+    "Pong!".to_string()
+}
+
+pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
+    command.name("ping").description("A ping command")
+}
+
 const REACTIONS: &[char] = &['😳', '😏', '😊', '😎'];
 struct Handler;
 #[async_trait]
@@ -160,6 +180,8 @@ impl EventHandler for Handler {
             Activity::watching(format!("you 🔨🙂 | !help | {}", wallace_version()))
         };
         let _ = ctx.set_activity(activity).await;
+
+        let _ = Command::create_global_application_command(ctx, register).await;
     }
 
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
@@ -177,6 +199,25 @@ impl EventHandler for Handler {
             let _ = msg
                 .react(ctx, REACTIONS[rng.gen_range(0..REACTIONS.len())])
                 .await;
+        }
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            let content = run(&command.data.options);
+
+            if let Err(why) = command
+                .create_interaction_response(&ctx.http, |response| {
+                    response
+                        .kind(InteractionResponseType::ChannelMessageWithSource)
+                        .interaction_response_data(|message| {
+                            message.ephemeral(true).content(content)
+                        })
+                })
+                .await
+            {
+                println!("Cannot respond to slash command: {}", why);
+            }
         }
     }
 }
