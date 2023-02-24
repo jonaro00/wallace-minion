@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     client::Context,
@@ -14,10 +16,11 @@ use super::spells::{SpellPrice, SHOPPABLE_SPELLS_AND_PRICES};
 use crate::{
     database::WallaceDBClient,
     discord::{get_db_handler, PREFIX},
+    services::do_payment,
 };
 
 #[group]
-#[commands(account, shop, coinflip, give, mint, set_mature)]
+#[commands(account, shop, coinflip, slots, give, mint, set_mature)]
 struct Bank;
 
 #[command]
@@ -183,11 +186,11 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             .await;
         return Ok(());
     }
-    let mut rng: StdRng = SeedableRng::from_entropy();
     if let Err(e) = db.has_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
+    let mut rng: StdRng = SeedableRng::from_entropy();
     let (res, reply) = if rng.gen_ratio(1, 2) {
         // Win
         (
@@ -214,6 +217,290 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                         .icon_url("https://cdn.7tv.app/emote/61e63db277175547b425ce27/1x.gif")
                 })
                 .title(reply)
+            })
+        })
+        .await;
+    Ok(())
+}
+
+#[derive(Clone, PartialEq)]
+struct SlotItem {
+    item: SlotItemType,
+    material: SlotItemMaterial,
+    color: SlotItemColor,
+}
+#[derive(Clone, Debug, PartialEq)]
+enum SlotItemType {
+    Crown,
+    Ring,
+    Hammer,
+    Crab,
+    Cherry,
+    Grapes,
+    Blueberries,
+    Pear,
+    Apple,
+}
+impl SlotItemType {
+    fn emoji(&self) -> char {
+        match self {
+            Self::Crown => '👑',
+            Self::Ring => '💍',
+            Self::Hammer => '🔨',
+            Self::Crab => '🦀',
+            Self::Cherry => '🍒',
+            Self::Grapes => '🍇',
+            Self::Blueberries => '🫐',
+            Self::Pear => '🍐',
+            Self::Apple => '🍏',
+        }
+    }
+}
+#[derive(Clone, PartialEq)]
+enum SlotItemMaterial {
+    Metal,
+    Fruit,
+    None,
+}
+#[derive(Clone, PartialEq)]
+enum SlotItemColor {
+    Red,
+    Purple,
+    Green,
+    None,
+}
+const SLOT_WHEEL_ITEMS: u8 = 13;
+const SLOT_WHEEL: [SlotItem; SLOT_WHEEL_ITEMS as usize] = [
+    SlotItem {
+        item: SlotItemType::Crown,
+        material: SlotItemMaterial::Metal,
+        color: SlotItemColor::None,
+    },
+    SlotItem {
+        item: SlotItemType::Ring,
+        material: SlotItemMaterial::Metal,
+        color: SlotItemColor::None,
+    },
+    SlotItem {
+        item: SlotItemType::Hammer,
+        material: SlotItemMaterial::Metal,
+        color: SlotItemColor::None,
+    },
+    SlotItem {
+        item: SlotItemType::Crab,
+        material: SlotItemMaterial::None,
+        color: SlotItemColor::Red,
+    },
+    SlotItem {
+        item: SlotItemType::Cherry,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Red,
+    },
+    SlotItem {
+        item: SlotItemType::Grapes,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Purple,
+    },
+    SlotItem {
+        item: SlotItemType::Grapes,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Purple,
+    },
+    SlotItem {
+        item: SlotItemType::Blueberries,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Purple,
+    },
+    SlotItem {
+        item: SlotItemType::Blueberries,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Purple,
+    },
+    SlotItem {
+        item: SlotItemType::Pear,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Green,
+    },
+    SlotItem {
+        item: SlotItemType::Pear,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Green,
+    },
+    SlotItem {
+        item: SlotItemType::Apple,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Green,
+    },
+    SlotItem {
+        item: SlotItemType::Apple,
+        material: SlotItemMaterial::Fruit,
+        color: SlotItemColor::Green,
+    },
+];
+use rand::seq::SliceRandom;
+fn random_wheel(rng: &mut StdRng) -> Vec<SlotItem> {
+    let mut v: Vec<SlotItem> = SLOT_WHEEL.iter().map(Clone::clone).collect();
+    v.shuffle(rng);
+    v
+}
+fn print_slots(
+    vs: &(&Vec<SlotItem>, &Vec<SlotItem>, &Vec<SlotItem>),
+    is: &[i8; 3],
+    locked: u8,
+) -> String {
+    let (v1, v2, v3) = vs;
+    let (i1, i2, i3) = (is[0], is[1], is[2]);
+    let w = '▫';
+    format!(
+        "{}{}{}\n{}{}{}\n{}{}{}",
+        if locked < 1 {
+            v1[((i1 - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 2 {
+            v2[((i2 - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 3 {
+            v3[((i3 - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        v1[i1 as usize].item.emoji(),
+        v2[i2 as usize].item.emoji(),
+        v3[i3 as usize].item.emoji(),
+        if locked < 1 {
+            v1[((i1 + 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 2 {
+            v2[((i2 + 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 3 {
+            v3[((i3 + 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+    )
+}
+
+#[command]
+#[bucket = "slots"]
+#[description(
+    "Try your luck at the casino.
+    Costs 1 𝓚𝓪𝓹𝓼𝔂𝓵, but you can win up to 333 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!
+    User must be marked mature to get access."
+)]
+async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
+    let uid = msg.author.id.0;
+    let db = get_db_handler(ctx).await;
+    if !db.get_user_mature(uid).await? {
+        let _ = msg
+            .channel_id
+            .say(ctx, "User must be marked as mature ☝🤓")
+            .await;
+        return Ok(());
+    }
+    if do_payment(ctx, msg, 1).await.is_err() {
+        return Ok(());
+    }
+    let mut rng: StdRng = SeedableRng::from_entropy();
+    let wheel1 = random_wheel(&mut rng);
+    let wheel2 = random_wheel(&mut rng);
+    let wheel3 = random_wheel(&mut rng);
+    let wheels = (&wheel1, &wheel2, &wheel3);
+    let counters: &mut [i8; 3] = &mut [0, 0, 0];
+    let mut m = msg
+        .channel_id
+        .say(ctx, print_slots(&wheels, counters, 0))
+        .await?;
+    let delay = Duration::from_millis(800);
+    for i in 0..3 {
+        for _ in 0..rng.gen_range(1..8) {
+            tokio::time::sleep(delay).await;
+            for j in counters.iter_mut().take(3).skip(i) {
+                *j = (*j - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8);
+            }
+            let _ = m
+                .edit(ctx, |e| e.content(print_slots(&wheels, counters, i as u8)))
+                .await;
+        }
+    }
+    tokio::time::sleep(delay).await;
+    let _ = m
+        .edit(ctx, |e| e.content(print_slots(&wheels, counters, 3)))
+        .await;
+
+    let (amount, result) = match (
+        &wheel1[counters[0] as usize],
+        &wheel2[counters[1] as usize],
+        &wheel3[counters[2] as usize],
+    ) {
+        (i, j, k) if i == j && j == k => match i.item {
+            SlotItemType::Crown => (333, "Three Crowns"),
+            SlotItemType::Ring => (66, "Three Rings"),
+            SlotItemType::Hammer => (55, "Three Hammers"),
+            SlotItemType::Crab => (44, "Three Crabs"),
+            SlotItemType::Cherry => (33, "Three Cherrys"),
+            SlotItemType::Grapes => (14, "Three Grapes"),
+            SlotItemType::Blueberries => (13, "Three Blueberries"),
+            SlotItemType::Pear => (12, "Three Pears"),
+            SlotItemType::Apple => (11, "Three Apples"),
+        },
+        (i, j, k) if i.color != SlotItemColor::None && i.color == j.color && j.color == k.color => {
+            match i.color {
+                SlotItemColor::Red => (8, "Three Red"),
+                SlotItemColor::Purple => (4, "Three Purple"),
+                SlotItemColor::Green => (2, "Three Green"),
+                SlotItemColor::None => panic!(),
+            }
+        }
+        (i, j, k)
+            if i.material != SlotItemMaterial::None
+                && i.material == j.material
+                && j.material == k.material =>
+        {
+            match i.material {
+                SlotItemMaterial::Metal => (7, "Three Shiny Metal Objects"),
+                SlotItemMaterial::Fruit => (1, "Three Fruits"),
+                SlotItemMaterial::None => panic!(),
+            }
+        }
+        _ => (0, ""),
+    };
+    if amount == 0 {
+        return Ok(());
+    }
+    if let Err(e) = db.add_bank_account_balance(uid, amount).await {
+        let _ = msg.channel_id.say(ctx, e).await;
+        return Ok(());
+    }
+    let _ = msg
+        .channel_id
+        .send_message(ctx, |m| {
+            m.add_embed(|e| {
+                e.author(|a| {
+                    a.name("Win!")
+                        .icon_url("https://cdn.7tv.app/emote/628d8b64ed0a40a5ec5f4810/1x.gif")
+                })
+                .title(format!("🟩 {result}! Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"))
             })
         })
         .await;
@@ -299,4 +586,73 @@ async fn set_mature(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
     }
     let _ = msg.react(ctx, '🫡').await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn slots() {
+        let mut spent = 0;
+        let mut won = 0;
+        let mut loss = 0;
+        let mut neus = 0;
+        let mut wins = 0;
+        let mut rng: StdRng = SeedableRng::from_entropy();
+        for _ in 0..1000000 {
+            let wheel1 = random_wheel(&mut rng);
+            let item1 = &wheel1[0];
+            let wheel2 = random_wheel(&mut rng);
+            let item2 = &wheel2[0];
+            let wheel3 = random_wheel(&mut rng);
+            let item3 = &wheel3[0];
+            let amount = match (item1, item2, item3) {
+                (i, j, k) if i == j && j == k => match i.item {
+                    SlotItemType::Crown => 333,
+                    SlotItemType::Ring => 66,
+                    SlotItemType::Hammer => 55,
+                    SlotItemType::Crab => 44,
+                    SlotItemType::Cherry => 33,
+                    SlotItemType::Grapes => 14,
+                    SlotItemType::Blueberries => 13,
+                    SlotItemType::Pear => 12,
+                    SlotItemType::Apple => 11,
+                },
+                (i, j, k)
+                    if i.color != SlotItemColor::None
+                        && i.color == j.color
+                        && j.color == k.color =>
+                {
+                    match i.color {
+                        SlotItemColor::Red => 8,
+                        SlotItemColor::Purple => 4,
+                        SlotItemColor::Green => 2,
+                        SlotItemColor::None => panic!(),
+                    }
+                }
+                (i, j, k)
+                    if i.material != SlotItemMaterial::None
+                        && i.material == j.material
+                        && j.material == k.material =>
+                {
+                    match i.material {
+                        SlotItemMaterial::Metal => 7,
+                        SlotItemMaterial::Fruit => 1,
+                        SlotItemMaterial::None => panic!(),
+                    }
+                }
+                _ => 0,
+            };
+            spent += 1;
+            if amount == 0 {
+                loss += 1;
+            } else if amount == 1 {
+                neus += 1;
+            } else {
+                wins += 1;
+            }
+            won += amount;
+        }
+        println!("Loss: {loss}, Neus: {neus}, Wins: {wins}, Spent: {spent}, Won: {won}");
+    }
 }

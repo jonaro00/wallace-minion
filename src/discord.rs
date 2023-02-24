@@ -87,6 +87,8 @@ pub async fn build_bot(
         .unrecognised_command(unknown_command_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
+        .bucket("slots", |b| b.delay(10))
+        .await
         .group(&GENERAL_GROUP)
         .group(&BANK_GROUP)
         .group(&SPELLS_GROUP)
@@ -246,23 +248,26 @@ async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Result<
 
 #[hook]
 async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, cmd_name: &str) {
-    let s = match err {
+    if let Some(s) = match err {
         DispatchError::NotEnoughArguments { min, given } => {
-            format!("Need {} arguments, but only got {} 😋", min, given)
+            Some(format!("Need {} arguments, but only got {} 😋", min, given))
         }
-        DispatchError::TooManyArguments { max, given } => {
-            format!("Max arguments allowed is {}, but got {} 😋", max, given)
-        }
+        DispatchError::TooManyArguments { max, given } => Some(format!(
+            "Max arguments allowed is {}, but got {} 😋",
+            max, given
+        )),
         DispatchError::LackingPermissions(_) | DispatchError::LackingRole => {
-            "You can't do that 😋".to_owned()
+            Some("You can't do that 😋".to_owned())
         }
-        DispatchError::OnlyForGuilds => "That can only be done in servers 😋".to_owned(),
+        DispatchError::OnlyForGuilds => Some("That can only be done in servers 😋".to_owned()),
+        DispatchError::Ratelimited(_) => None,
         _ => {
             println!("Unhandled dispatch error in {}. {:?}", cmd_name, err);
-            "Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned()
+            Some("Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned())
         }
-    };
-    let _ = msg.channel_id.say(ctx, &s).await;
+    } {
+        let _ = msg.channel_id.say(ctx, &s).await;
+    }
 }
 
 #[help]
@@ -351,11 +356,11 @@ async fn schedule_loop(ctx: Context) {
                                 .expect("Failed time conversion"),
                         )
                         .await;
-                        let task = t.cmd.parse::<ScheduleTask>();
-                        if task.is_err() {
-                            break;
-                        }
-                        match task.unwrap() {
+                        let task = match t.cmd.parse::<ScheduleTask>() {
+                            Ok(t) => t,
+                            Err(_) => break,
+                        };
+                        match task {
                             ScheduleTask::Say => {
                                 let arg = match t.arg {
                                     Some(ref s) => s,
