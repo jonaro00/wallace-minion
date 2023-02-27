@@ -101,12 +101,12 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
         .enumerate()
         .map(|(i, (m, b))| {
             format!(
-                "{}`{}. {:<20} {:>4}`{}\n",
+                "{}`{:>2}. {:<20} {:>4}`{}\n",
                 match i {
                     0 => "<:KapsylGold:1079763232656470077>",
                     1 => "<:KapsylSilver:1079763224691494982>",
                     2 => "<:KapsylBronze:1079763211521380363>",
-                    _ => "      ",
+                    _ => "▫",
                 },
                 i + 1,
                 m.nick.unwrap_or(m.user.name),

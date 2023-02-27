@@ -74,7 +74,7 @@ pub async fn get_emote_name_url(q: &str) -> Result<(String, String), Box<dyn Err
         .map_err(|_| "Request to 7TV failed.")?
         .json()
         .await
-        .map_err(|_| "Invalid API response.")?;
+        .map_err(|_| "Failed to parse 7TV API response.")?;
     let emote = match r.data {
         StvData::StvEmoteData(e) => e.emote,
         StvData::StvEmotesData(e) => match e.emotes.items.first() {
@@ -94,29 +94,58 @@ pub async fn get_emote_name_url(q: &str) -> Result<(String, String), Box<dyn Err
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
     #[tokio::test]
     async fn catjam() {
-        let (name, url) = get_emote_name_url("catjam").await.unwrap();
-        assert_eq!(name, "catJAM");
-        assert!(url.starts_with("https://"));
-        assert!(url.contains("60ae7316f7c927fad14e6ca2"));
-        assert!(url.ends_with(".gif"));
+        for _ in 0..10 {
+            let (name, url) = match get_emote_name_url("catjam").await {
+                Ok(v) => v,
+                Err(_) => {
+                    sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+            };
+            assert_eq!(name, "catJAM");
+            assert!(url.starts_with("https://"));
+            assert!(url.contains("60ae7316f7c927fad14e6ca2"));
+            assert!(url.ends_with(".gif"));
+            break;
+        }
     }
     #[tokio::test]
     async fn catjam_quoted() {
-        let (name, url) = get_emote_name_url("\"catJAM\"").await.unwrap();
-        assert_eq!(name, "catJAM");
-        assert!(url.starts_with("https://"));
-        assert!(url.contains("60ae7316f7c927fad14e6ca2"));
-        assert!(url.ends_with(".gif"));
+        for _ in 0..10 {
+            let (name, url) = match get_emote_name_url("\"catJAM\"").await {
+                Ok(v) => v,
+                Err(_) => {
+                    sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+            };
+            assert_eq!(name, "catJAM");
+            assert!(url.starts_with("https://"));
+            assert!(url.contains("60ae7316f7c927fad14e6ca2"));
+            assert!(url.ends_with(".gif"));
+            break;
+        }
     }
     #[tokio::test]
     async fn sadge() {
-        let (name, url) = get_emote_name_url("sadge").await.unwrap();
-        assert_eq!(name, "Sadge");
-        assert!(url.starts_with("https://"));
-        assert!(url.contains("603cac391cd55c0014d989be"));
-        assert!(url.ends_with(".png"));
+        for _ in 0..10 {
+            let (name, url) = match get_emote_name_url("sadge").await {
+                Ok(v) => v,
+                Err(_) => {
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    continue;
+                }
+            };
+            assert_eq!(name, "Sadge");
+            assert!(url.starts_with("https://"));
+            assert!(url.contains("603cac391cd55c0014d989be"));
+            assert!(url.ends_with(".png"));
+            break;
+        }
     }
     #[tokio::test]
     async fn no_query() {

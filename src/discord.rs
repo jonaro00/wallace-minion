@@ -11,6 +11,7 @@ use serenity::{
     async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
     framework::standard::{
+        buckets::LimitedFor,
         help_commands::with_embeds,
         macros::{help, hook},
         Args, CommandError, CommandGroup, CommandResult, DispatchError, HelpOptions,
@@ -87,7 +88,7 @@ pub async fn build_bot(
         .unrecognised_command(unknown_command_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
-        .bucket("slots", |b| b.delay(10))
+        .bucket("slots", |b| b.delay(10).limit_for(LimitedFor::Channel))
         .await
         .group(&GENERAL_GROUP)
         .group(&BANK_GROUP)

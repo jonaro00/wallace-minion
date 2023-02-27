@@ -27,14 +27,15 @@ pub fn to_cool_text(text: &str, font: Font) -> String {
     text.chars()
         .map(|c| {
             if c.is_ascii_uppercase() && upper.is_some() {
-                char::from_u32((c as u32) - ASCII_BASE_UPPER + upper.unwrap()).unwrap_or(c)
+                char::from_u32((c as u32) - ASCII_BASE_UPPER + upper.unwrap())
             } else if c.is_ascii_lowercase() && lower.is_some() {
-                char::from_u32((c as u32) - ASCII_BASE_LOWER + lower.unwrap()).unwrap_or(c)
+                char::from_u32((c as u32) - ASCII_BASE_LOWER + lower.unwrap())
             } else if c.is_ascii_digit() && numeric.is_some() {
-                char::from_u32((c as u32) - ASCII_BASE_NUMERIC + numeric.unwrap()).unwrap_or(c)
+                char::from_u32((c as u32) - ASCII_BASE_NUMERIC + numeric.unwrap())
             } else {
-                c
+                Some(c)
             }
+            .unwrap_or(c)
         })
         .collect()
 }

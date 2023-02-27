@@ -37,7 +37,7 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
                             t.id,
                             t.cron,
                             t.cmd,
-                            t.arg.clone().unwrap_or_else(|| "".into())
+                            t.arg.clone().unwrap_or_default()
                         )
                     })
                     .collect()
