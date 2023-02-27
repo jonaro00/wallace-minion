@@ -34,6 +34,7 @@ async fn version(ctx: &Context, msg: &Message) -> CommandResult {
                     .colour((58, 8, 9))
                     .image("https://cdn.7tv.app/emote/63ce475278d87d417ed3c8e1/4x.png")
                     .thumbnail("https://cdn.7tv.app/emote/631b61a98cf0978e2955b04f/2x.gif")
+                    .field("Code:", "https://github.com/jonaro00/wallace-minion", true)
             })
         })
         .await?;

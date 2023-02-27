@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use serenity::{
     client::Context,
     framework::standard::{
@@ -11,6 +11,7 @@ use serenity::{
     model::prelude::Message,
     utils::parse_username,
 };
+use tokio::time::sleep;
 
 use super::spells::{SpellPrice, SHOPPABLE_SPELLS_AND_PRICES};
 use crate::{
@@ -96,14 +97,21 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
     let s: String = v
         .into_iter()
         .rev()
-        .take(5)
+        .take(10)
         .enumerate()
         .map(|(i, (m, b))| {
             format!(
-                "`{}. {:<19} {:>3}`\n",
+                "{}`{}. {:<20} {:>4}`{}\n",
+                match i {
+                    0 => "<:KapsylGold:1079763232656470077>",
+                    1 => "<:KapsylSilver:1079763224691494982>",
+                    2 => "<:KapsylBronze:1079763211521380363>",
+                    _ => "      ",
+                },
                 i + 1,
                 m.nick.unwrap_or(m.user.name),
-                b
+                b,
+                "<:Kapsyl:1079763140272734218>",
             )
         })
         .collect();
@@ -114,7 +122,7 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
                     a.name("Top 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 holders")
                         .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif")
                 })
-                .title(s)
+                .field("", s, true)
             })
         })
         .await?;
@@ -130,6 +138,7 @@ async fn shop(ctx: &Context, msg: &Message) -> CommandResult {
             m.add_embed(|e| {
                 e.title("\\>> 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 SHOP <<")
                     .thumbnail("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif")
+                    .colour((56, 157, 88))
                     .field("Buffs", "", false)
                     .field("Items", "", false)
                     .field(
@@ -269,7 +278,7 @@ enum SlotItemColor {
     Green,
     None,
 }
-const SLOT_WHEEL_ITEMS: u8 = 13;
+const SLOT_WHEEL_ITEMS: i8 = 13;
 const SLOT_WHEEL: [SlotItem; SLOT_WHEEL_ITEMS as usize] = [
     SlotItem {
         item: SlotItemType::Crown,
@@ -337,122 +346,13 @@ const SLOT_WHEEL: [SlotItem; SLOT_WHEEL_ITEMS as usize] = [
         color: SlotItemColor::Green,
     },
 ];
-use rand::seq::SliceRandom;
 fn random_wheel(rng: &mut StdRng) -> Vec<SlotItem> {
     let mut v: Vec<SlotItem> = SLOT_WHEEL.iter().map(Clone::clone).collect();
     v.shuffle(rng);
     v
 }
-fn print_slots(
-    vs: &(&Vec<SlotItem>, &Vec<SlotItem>, &Vec<SlotItem>),
-    is: &[i8; 3],
-    locked: u8,
-) -> String {
-    let (v1, v2, v3) = vs;
-    let (i1, i2, i3) = (is[0], is[1], is[2]);
-    let w = '▫';
-    format!(
-        "{}{}{}\n{}{}{}\n{}{}{}",
-        if locked < 1 {
-            v1[((i1 - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
-                .item
-                .emoji()
-        } else {
-            w
-        },
-        if locked < 2 {
-            v2[((i2 - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
-                .item
-                .emoji()
-        } else {
-            w
-        },
-        if locked < 3 {
-            v3[((i3 - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
-                .item
-                .emoji()
-        } else {
-            w
-        },
-        v1[i1 as usize].item.emoji(),
-        v2[i2 as usize].item.emoji(),
-        v3[i3 as usize].item.emoji(),
-        if locked < 1 {
-            v1[((i1 + 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
-                .item
-                .emoji()
-        } else {
-            w
-        },
-        if locked < 2 {
-            v2[((i2 + 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
-                .item
-                .emoji()
-        } else {
-            w
-        },
-        if locked < 3 {
-            v3[((i3 + 1).rem_euclid(SLOT_WHEEL_ITEMS as i8)) as usize]
-                .item
-                .emoji()
-        } else {
-            w
-        },
-    )
-}
-
-#[command]
-#[bucket = "slots"]
-#[description(
-    "Try your luck at the casino.
-    Costs 1 𝓚𝓪𝓹𝓼𝔂𝓵, but you can win up to 333 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!
-    User must be marked mature to get access."
-)]
-async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
-    let uid = msg.author.id.0;
-    let db = get_db_handler(ctx).await;
-    if !db.get_user_mature(uid).await? {
-        let _ = msg
-            .channel_id
-            .say(ctx, "User must be marked as mature ☝🤓")
-            .await;
-        return Ok(());
-    }
-    if do_payment(ctx, msg, 1).await.is_err() {
-        return Ok(());
-    }
-    let mut rng: StdRng = SeedableRng::from_entropy();
-    let wheel1 = random_wheel(&mut rng);
-    let wheel2 = random_wheel(&mut rng);
-    let wheel3 = random_wheel(&mut rng);
-    let wheels = (&wheel1, &wheel2, &wheel3);
-    let counters: &mut [i8; 3] = &mut [0, 0, 0];
-    let mut m = msg
-        .channel_id
-        .say(ctx, print_slots(&wheels, counters, 0))
-        .await?;
-    let delay = Duration::from_millis(800);
-    for i in 0..3 {
-        for _ in 0..rng.gen_range(1..8) {
-            tokio::time::sleep(delay).await;
-            for j in counters.iter_mut().take(3).skip(i) {
-                *j = (*j - 1).rem_euclid(SLOT_WHEEL_ITEMS as i8);
-            }
-            let _ = m
-                .edit(ctx, |e| e.content(print_slots(&wheels, counters, i as u8)))
-                .await;
-        }
-    }
-    tokio::time::sleep(delay).await;
-    let _ = m
-        .edit(ctx, |e| e.content(print_slots(&wheels, counters, 3)))
-        .await;
-
-    let (amount, result) = match (
-        &wheel1[counters[0] as usize],
-        &wheel2[counters[1] as usize],
-        &wheel3[counters[2] as usize],
-    ) {
+fn calculate_payout_result(i1: &SlotItem, i2: &SlotItem, i3: &SlotItem) -> (i64, String) {
+    let (amount, s) = match (i1, i2, i3) {
         (i, j, k) if i == j && j == k => match i.item {
             SlotItemType::Crown => (333, "Three Crowns"),
             SlotItemType::Ring => (66, "Three Rings"),
@@ -485,6 +385,119 @@ async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
         }
         _ => (0, ""),
     };
+    (amount, s.to_string())
+}
+fn print_slots(
+    vs: &(Vec<SlotItem>, Vec<SlotItem>, Vec<SlotItem>),
+    is: &[i8; 3],
+    locked: u8,
+) -> String {
+    let (v1, v2, v3) = vs;
+    let (i1, i2, i3) = (is[0], is[1], is[2]);
+    let w = '▫';
+    format!(
+        "{}{}{}\n{}{}{}\n{}{}{}",
+        if locked < 1 {
+            v1[((i1 - 1).rem_euclid(SLOT_WHEEL_ITEMS)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 2 {
+            v2[((i2 - 1).rem_euclid(SLOT_WHEEL_ITEMS)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 3 {
+            v3[((i3 - 1).rem_euclid(SLOT_WHEEL_ITEMS)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        v1[i1 as usize].item.emoji(),
+        v2[i2 as usize].item.emoji(),
+        v3[i3 as usize].item.emoji(),
+        if locked < 1 {
+            v1[((i1 + 1).rem_euclid(SLOT_WHEEL_ITEMS)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 2 {
+            v2[((i2 + 1).rem_euclid(SLOT_WHEEL_ITEMS)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+        if locked < 3 {
+            v3[((i3 + 1).rem_euclid(SLOT_WHEEL_ITEMS)) as usize]
+                .item
+                .emoji()
+        } else {
+            w
+        },
+    )
+}
+
+const DELAY_BETWEEN_EDITS: Duration = Duration::from_millis(800);
+#[command]
+#[bucket = "slots"]
+#[description(
+    "Try your luck at the casino.
+    Costs 1 𝓚𝓪𝓹𝓼𝔂𝓵, but you can win up to 333 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!
+    User must be marked mature to get access."
+)]
+async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
+    let uid = msg.author.id.0;
+    let db = get_db_handler(ctx).await;
+    if !db.get_user_mature(uid).await? {
+        let _ = msg
+            .channel_id
+            .say(ctx, "User must be marked as mature ☝🤓")
+            .await;
+        return Ok(());
+    }
+    if do_payment(ctx, msg, 1).await.is_err() {
+        return Ok(());
+    }
+    let mut rng: StdRng = SeedableRng::from_entropy();
+    let wheels = (
+        random_wheel(&mut rng),
+        random_wheel(&mut rng),
+        random_wheel(&mut rng),
+    );
+    let counters: &mut [i8; 3] = &mut [0, 0, 0];
+    let mut m = msg
+        .channel_id
+        .say(ctx, print_slots(&wheels, counters, 0))
+        .await?;
+    for i in 0..3 {
+        for _ in 0..rng.gen_range(1..8) {
+            sleep(DELAY_BETWEEN_EDITS).await;
+            for j in counters.iter_mut().take(3).skip(i) {
+                *j = (*j - 1).rem_euclid(SLOT_WHEEL_ITEMS);
+            }
+            let _ = m
+                .edit(ctx, |e| e.content(print_slots(&wheels, counters, i as u8)))
+                .await;
+        }
+    }
+    sleep(DELAY_BETWEEN_EDITS).await;
+    let _ = m
+        .edit(ctx, |e| e.content(print_slots(&wheels, counters, 3)))
+        .await;
+
+    let (amount, result) = calculate_payout_result(
+        &wheels.0[counters[0] as usize],
+        &wheels.1[counters[1] as usize],
+        &wheels.2[counters[2] as usize],
+    );
     if amount == 0 {
         return Ok(());
     }
@@ -593,57 +606,18 @@ mod tests {
     use super::*;
     #[test]
     fn slots() {
-        let mut spent = 0;
         let mut won = 0;
         let mut loss = 0;
         let mut neus = 0;
         let mut wins = 0;
         let mut rng: StdRng = SeedableRng::from_entropy();
-        for _ in 0..1000000 {
-            let wheel1 = random_wheel(&mut rng);
-            let item1 = &wheel1[0];
-            let wheel2 = random_wheel(&mut rng);
-            let item2 = &wheel2[0];
-            let wheel3 = random_wheel(&mut rng);
-            let item3 = &wheel3[0];
-            let amount = match (item1, item2, item3) {
-                (i, j, k) if i == j && j == k => match i.item {
-                    SlotItemType::Crown => 333,
-                    SlotItemType::Ring => 66,
-                    SlotItemType::Hammer => 55,
-                    SlotItemType::Crab => 44,
-                    SlotItemType::Cherry => 33,
-                    SlotItemType::Grapes => 14,
-                    SlotItemType::Blueberries => 13,
-                    SlotItemType::Pear => 12,
-                    SlotItemType::Apple => 11,
-                },
-                (i, j, k)
-                    if i.color != SlotItemColor::None
-                        && i.color == j.color
-                        && j.color == k.color =>
-                {
-                    match i.color {
-                        SlotItemColor::Red => 8,
-                        SlotItemColor::Purple => 4,
-                        SlotItemColor::Green => 2,
-                        SlotItemColor::None => panic!(),
-                    }
-                }
-                (i, j, k)
-                    if i.material != SlotItemMaterial::None
-                        && i.material == j.material
-                        && j.material == k.material =>
-                {
-                    match i.material {
-                        SlotItemMaterial::Metal => 7,
-                        SlotItemMaterial::Fruit => 1,
-                        SlotItemMaterial::None => panic!(),
-                    }
-                }
-                _ => 0,
-            };
-            spent += 1;
+        let spent = 1000000;
+        for _ in 0..spent {
+            let (amount, _) = calculate_payout_result(
+                &SLOT_WHEEL[rng.gen_range(0..SLOT_WHEEL.len())],
+                &SLOT_WHEEL[rng.gen_range(0..SLOT_WHEEL.len())],
+                &SLOT_WHEEL[rng.gen_range(0..SLOT_WHEEL.len())],
+            );
             if amount == 0 {
                 loss += 1;
             } else if amount == 1 {
