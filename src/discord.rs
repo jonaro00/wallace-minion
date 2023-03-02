@@ -261,7 +261,10 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
             Some("You can't do that 😋".to_owned())
         }
         DispatchError::OnlyForGuilds => Some("That can only be done in servers 😋".to_owned()),
-        DispatchError::Ratelimited(_) => None,
+        DispatchError::Ratelimited(_) => {
+            let _ = msg.react(ctx, '⏱').await;
+            None
+        },
         _ => {
             println!("Unhandled dispatch error in {}. {:?}", cmd_name, err);
             Some("Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned())
@@ -418,6 +421,6 @@ async fn schedule_loop(ctx: Context) {
                 })
             });
         }
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        tokio::time::sleep(Duration::from_secs(30)).await;
     }
 }

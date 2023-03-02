@@ -7,6 +7,6 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-prisma-client-rust-cli = { tag = "0.6.4", git = "https://github.com/Brendonovich/prisma-client-rust", default-features = false, features = [
+prisma-client-rust-cli = { tag = "0.6.5", git = "https://github.com/Brendonovich/prisma-client-rust", default-features = false, features = [
     "postgresql",
 ] }

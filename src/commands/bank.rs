@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[group]
-#[commands(account, shop, coinflip, slots, give, mint, set_mature)]
+#[commands(account, shop, slots, give, mint, set_mature)]
 struct Bank;
 
 #[command]
