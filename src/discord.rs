@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use async_openai::Client as OpenAIClient;
 use chrono::Utc;
 use lazy_static::lazy_static;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -24,9 +25,9 @@ use serenity::{
     },
     prelude::TypeMapKey,
 };
-use tracing::{info, warn, error};
 use strum::EnumString;
 use tokio::{task::JoinHandle, time::Duration};
+use tracing::{error, info, warn};
 
 use crate::{
     commands::{
@@ -43,20 +44,16 @@ use crate::{
     services::{riot_api::RiotAPIClients, set_server_name},
 };
 
-
 lazy_static! {
-    pub static ref WALLACE_VERSION: String = 
-        format!(
-            "v{}{}",
-            env!("CARGO_PKG_VERSION"),
-            if cfg!(debug_assertions) {
-                " (development)"
-            } else {
-                ""
-            },
-        );
-    
-
+    pub static ref WALLACE_VERSION: String = format!(
+        "v{}{}",
+        env!("CARGO_PKG_VERSION"),
+        if cfg!(debug_assertions) {
+            " (development)"
+        } else {
+            ""
+        },
+    );
 }
 
 pub const PREFIX: &str = "!";
@@ -66,6 +63,7 @@ pub async fn build_bot(
     riot_token_lol: String,
     riot_token_tft: String,
     db_url: String,
+    openai_token: String,
 ) -> DiscordClient {
     let http = Http::new(&discord_token);
     let (owners, bot_id) = match http.get_current_application_info().await {
@@ -130,6 +128,7 @@ pub async fn build_bot(
             &riot_token_tft,
         )));
         data.insert::<WallaceDB>(Arc::new(db));
+        data.insert::<WallaceOpenAI>(Arc::new(OpenAIClient::new().with_api_key(openai_token)));
     } // Release lock
 
     client
@@ -158,6 +157,19 @@ pub async fn get_db_handler(ctx: &Context) -> Arc<PrismaClient> {
         .await
         .get::<WallaceDB>()
         .expect("Expected DB Handler in TypeMap.")
+        .clone()
+}
+
+struct WallaceOpenAI;
+impl TypeMapKey for WallaceOpenAI {
+    type Value = Arc<OpenAIClient>;
+}
+pub async fn get_openai(ctx: &Context) -> Arc<OpenAIClient> {
+    ctx.data
+        .read()
+        .await
+        .get::<WallaceOpenAI>()
+        .expect("Expected OpenAI Client in TypeMap.")
         .clone()
 }
 
@@ -270,7 +282,7 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
         DispatchError::Ratelimited(_) => {
             let _ = msg.react(ctx, '⏱').await;
             None
-        },
+        }
         _ => {
             warn!("Unhandled dispatch error in {}. {:?}", cmd_name, err);
             Some("Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned())

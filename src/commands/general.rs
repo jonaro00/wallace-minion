@@ -1,3 +1,6 @@
+use async_openai::types::{
+    ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role,
+};
 use serenity::{
     client::Context,
     framework::standard::{
@@ -7,10 +10,10 @@ use serenity::{
     model::prelude::Message,
 };
 
-use crate::discord::WALLACE_VERSION;
+use crate::discord::{get_openai, WALLACE_VERSION};
 
 #[group]
-#[commands(ping, version, speak, riddle, delete)]
+#[commands(ping, version, ai, speak, riddle, delete)]
 struct General;
 
 #[command]
@@ -38,6 +41,43 @@ async fn version(ctx: &Context, msg: &Message) -> CommandResult {
             })
         })
         .await?;
+    Ok(())
+}
+
+#[command]
+#[description("Ask me anything! ChatGPT will answer for me tho...")]
+async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let client = get_openai(ctx).await;
+    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let request = CreateChatCompletionRequestArgs::default()
+        .model("gpt-3.5-turbo")
+        .messages([
+            ChatCompletionRequestMessageArgs::default()
+                .role(Role::System)
+                .content("
+                    You are a minion version of Wallace from the animated series Wallace and Gromit.
+                    You are a mischievous and cocky helper minion.
+                    You love swinging your hammer.
+                    You are interested in hammers and crabs, and run a casino in your free time.
+                    You always add a small comment about your personality in your responses to messages.
+                    ")
+                .build()?,
+            ChatCompletionRequestMessageArgs::default()
+                .role(Role::User)
+                .content(args.rest())
+                .build()?,
+        ])
+        .build()?;
+
+    let response = client.chat().create(request).await?;
+    if response.choices.is_empty() {
+        return Ok(());
+    }
+    let resp = &response.choices[0].message.content;
+    if let Ok(typing) = typing {
+        let _ = typing.stop();
+    }
+    msg.channel_id.say(ctx, resp).await?;
     Ok(())
 }
 

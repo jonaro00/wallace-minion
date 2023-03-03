@@ -24,8 +24,18 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     let db_url = secret_store
         .get("DATABASE_URL")
         .expect("URL for database missing! (env variable `DATABASE_URL`)");
+    let openai_token = secret_store
+        .get("OPENAI_TOKEN")
+        .expect("OpenAI token missing! (env variable `OPENAI_TOKEN`)");
 
-    let client = build_bot(discord_token, riot_token_lol, riot_token_tft, db_url).await;
+    let client = build_bot(
+        discord_token,
+        riot_token_lol,
+        riot_token_tft,
+        db_url,
+        openai_token,
+    )
+    .await;
 
     Ok(client)
 }
