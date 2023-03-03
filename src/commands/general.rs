@@ -7,7 +7,7 @@ use serenity::{
     model::prelude::Message,
 };
 
-use crate::discord::wallace_version;
+use crate::discord::WALLACE_VERSION;
 
 #[group]
 #[commands(ping, version, speak, riddle, delete)]
@@ -30,7 +30,7 @@ async fn version(ctx: &Context, msg: &Message) -> CommandResult {
         .send_message(ctx, |m| {
             m.add_embed(|e| {
                 e.author(|a| a.name("Wallace Minion"))
-                    .title(wallace_version())
+                    .title(WALLACE_VERSION.clone())
                     .colour((58, 8, 9))
                     .image("https://cdn.7tv.app/emote/63ce475278d87d417ed3c8e1/4x.png")
                     .thumbnail("https://cdn.7tv.app/emote/631b61a98cf0978e2955b04f/2x.gif")

@@ -6,6 +6,7 @@ use std::{
 };
 
 use chrono::Utc;
+use lazy_static::lazy_static;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     async_trait,
@@ -23,6 +24,7 @@ use serenity::{
     },
     prelude::TypeMapKey,
 };
+use tracing::{info, warn, error};
 use strum::EnumString;
 use tokio::{task::JoinHandle, time::Duration};
 
@@ -41,16 +43,20 @@ use crate::{
     services::{riot_api::RiotAPIClients, set_server_name},
 };
 
-pub fn wallace_version() -> String {
-    format!(
-        "v{}{}",
-        env!("CARGO_PKG_VERSION"),
-        if cfg!(debug_assertions) {
-            " (development)"
-        } else {
-            ""
-        },
-    )
+
+lazy_static! {
+    pub static ref WALLACE_VERSION: String = 
+        format!(
+            "v{}{}",
+            env!("CARGO_PKG_VERSION"),
+            if cfg!(debug_assertions) {
+                " (development)"
+            } else {
+                ""
+            },
+        );
+    
+
 }
 
 pub const PREFIX: &str = "!";
@@ -113,7 +119,7 @@ pub async fn build_bot(
     let db = new_client_with_url(&db_url)
         .await
         .expect("Database connection failed.");
-    println!("Connected to database!");
+    info!("Connected to database!");
 
     // Insert shared data
     {
@@ -173,14 +179,14 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data: Ready) {
-        println!("{} is connected!", data.user.name);
+        info!("{} is connected!", data.user.name);
         let activity = if cfg!(debug_assertions) {
             Activity::playing(format!(
                 "on a construction site 🔨🙂 | {}",
-                wallace_version()
+                *WALLACE_VERSION
             ))
         } else {
-            Activity::watching(format!("you 🔨🙂 | !help | {}", wallace_version()))
+            Activity::watching(format!("you 🔨🙂 | !help | {}", *WALLACE_VERSION))
         };
         let _ = ctx.set_activity(activity).await;
 
@@ -188,12 +194,12 @@ impl EventHandler for Handler {
     }
 
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
-        println!("Loaded {} guilds.", guilds.len());
+        info!("Loaded {} guilds.", guilds.len());
         tokio::spawn(schedule_loop(ctx));
     }
 
     async fn resume(&self, _ctx: Context, _r: ResumedEvent) {
-        println!("Reconnected.");
+        info!("Reconnected.");
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -219,7 +225,7 @@ impl EventHandler for Handler {
                 })
                 .await
             {
-                println!("Cannot respond to slash command: {}", why);
+                warn!("Cannot respond to slash command: {}", why);
             }
         }
     }
@@ -239,7 +245,7 @@ async fn unknown_command_hook(ctx: &Context, msg: &Message, unknown_command_name
 #[hook]
 async fn after_hook(ctx: &Context, msg: &Message, cmd_name: &str, error: Result<(), CommandError>) {
     if let Err(why) = error {
-        println!("Error in {}: {:?}", cmd_name, why);
+        warn!("Error in {}: {:?}", cmd_name, why);
         let _ = msg
             .channel_id
             .say(ctx, "I did a bit of an epic fail there... 😕")
@@ -266,7 +272,7 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, err: DispatchError, c
             None
         },
         _ => {
-            println!("Unhandled dispatch error in {}. {:?}", cmd_name, err);
+            warn!("Unhandled dispatch error in {}. {:?}", cmd_name, err);
             Some("Idk man, this seems kinda sus to me... <:AMOGUS:845281082764165131>".to_owned())
         }
     } {
@@ -302,13 +308,13 @@ async fn built_in_tasks(ctx: Context) {
                     .expect("Failed time conversion"),
             )
             .await;
-            println!("Time for veckopeng.");
+            info!("Time for veckopeng.");
             for u in db.get_all_users().await.expect("Could not fetch users") {
                 let _ = db
                     .add_bank_account_balance(u.id as u64, WEEKLY_PAYOUT)
                     .await;
             }
-            println!("Veckopeng has been dealt.");
+            info!("Veckopeng has been dealt.");
         }
     });
 }
@@ -333,7 +339,7 @@ async fn schedule_loop(ctx: Context) {
         let tasks = match db.get_all_tasks().await {
             Ok(tasks) => tasks,
             Err(e) => {
-                println!("Failed to get tasks: {e:?}. Cancelling task loop.");
+                error!("Failed to get tasks: {e:?}. Cancelling task loop.");
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 continue;
             }
@@ -402,21 +408,21 @@ async fn schedule_loop(ctx: Context) {
                                 }
                             }
                             ScheduleTask::LolWeekly => {
-                                let channel = ChannelId(t.channel_id as u64)
-                                    .to_channel(&ctx)
-                                    .await
-                                    .map_err(|_| "what")
-                                    .and_then(|c| c.guild().ok_or("no guild"));
-                                if channel.is_err() {
-                                    println!("failed lolweekly");
-                                    continue;
-                                }
-                                let _ = lol_report(&ctx, channel.unwrap()).await;
+                                let gc = match ctx
+                                    .cache
+                                    .channel(t.channel_id as u64)
+                                    .and_then(|c| c.guild())
+                                {
+                                    Some(gc) => gc,
+                                    None => break,
+                                };
+                                let _ = lol_report(&ctx, gc).await;
                             }
                         }
                     }
+                    info!("Remove task {}", t.id);
                     if let Err(e) = db.delete_task(t.id).await {
-                        println!("WARN: Failed to remove task {}: {}", t.id, e);
+                        warn!("Failed to remove task {}: {}", t.id, e);
                     };
                 })
             });

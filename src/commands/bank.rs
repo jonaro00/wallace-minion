@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[group]
-#[commands(account, shop, slots, give, mint, set_mature)]
+#[commands(account, shop, slots, roulette, give, mint, set_mature)]
 struct Bank;
 
 #[command]
@@ -174,18 +174,84 @@ async fn shop(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+#[derive(PartialEq)]
+enum RouletteColor {
+    Black,
+    Red,
+    Green,
+}
+impl RouletteColor {
+    fn emoji(&self) -> char {
+        match self {
+            RouletteColor::Black => '⬛',
+            RouletteColor::Red => '🟥',
+            RouletteColor::Green => '🟩',
+        }
+    }
+}
+const ROULETTE_WHEEL_ITEMS: i8 = 17;
+const ROULETTE_WHEEL: [RouletteColor; ROULETTE_WHEEL_ITEMS as usize] = [
+    RouletteColor::Green,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+    RouletteColor::Black,
+    RouletteColor::Red,
+];
+fn print_roulette(i: i8, locked: bool) -> String {
+    let w = "▫";
+    format!(
+        "{}                                        {}\n{}{}🔽{}{}\n{}{}{}{}{}",
+        ROULETTE_WHEEL[((i - 4).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        ROULETTE_WHEEL[((i + 4).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        ROULETTE_WHEEL[((i - 3).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        if locked { w } else { "             " },
+        if locked { w } else { "             " },
+        ROULETTE_WHEEL[((i + 3).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        ROULETTE_WHEEL[((i - 2).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        ROULETTE_WHEEL[((i - 1).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        ROULETTE_WHEEL[i as usize].emoji(),
+        ROULETTE_WHEEL[((i + 1).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+        ROULETTE_WHEEL[((i + 2).rem_euclid(ROULETTE_WHEEL_ITEMS)) as usize].emoji(),
+    )
+}
+
 #[command]
-#[num_args(1)]
-#[aliases(cflip, kflip)]
-#[description("Double or nothing! User must be marked mature to get access.")]
-#[usage("<amount>")]
-#[example("1")]
-async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+#[bucket = "slots"]
+#[num_args(2)]
+#[aliases(roll)]
+#[description(
+    "Scuffed roulette! Win up to 16x your bet! User must be marked mature to get access."
+)]
+#[usage("<amount> <B|R|G>")]
+#[example("1 b")]
+async fn roulette(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let amount: i64 = args
         .current()
         .unwrap()
         .parse()
         .map_err(|_| "Invalid amount")?;
+    args.advance();
+    let bet = match args.current().unwrap().to_ascii_uppercase().as_str() {
+        "B" => RouletteColor::Black,
+        "R" => RouletteColor::Red,
+        "G" => RouletteColor::Green,
+        _ => {
+            let _ = msg.channel_id.say(ctx, "Choose B, R, or G.").await;
+            return Ok(());
+        }
+    };
     let uid = msg.author.id.0;
     let db = get_db_handler(ctx).await;
     if !db.get_user_mature(uid).await? {
@@ -195,25 +261,41 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             .await;
         return Ok(());
     }
-    if let Err(e) = db.has_bank_account_balance(uid, amount).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+    if do_payment(ctx, msg, amount).await.is_err() {
         return Ok(());
     }
     let mut rng: StdRng = SeedableRng::from_entropy();
-    let (res, reply) = if rng.gen_ratio(1, 2) {
-        // Win
-        (
-            db.add_bank_account_balance(uid, amount).await,
-            format!("🟩 Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"),
-        )
+    let mut counter: i8 = rng.gen_range(0..ROULETTE_WHEEL_ITEMS);
+    let mut m = msg
+        .channel_id
+        .say(ctx, print_roulette(counter, false))
+        .await?;
+    for _ in 0..rng.gen_range(7..12) {
+        sleep(DELAY_BETWEEN_EDITS).await;
+        counter = (counter + 1).rem_euclid(ROULETTE_WHEEL_ITEMS);
+        let _ = m
+            .edit(ctx, |e| e.content(print_roulette(counter, false)))
+            .await;
+    }
+
+    sleep(DELAY_BETWEEN_EDITS).await;
+    let _ = m
+        .edit(ctx, |e| e.content(print_roulette(counter, true)))
+        .await;
+
+    let (amount, result) = if bet == ROULETTE_WHEEL[counter as usize] {
+        match ROULETTE_WHEEL[counter as usize] {
+            RouletteColor::Black => (2 * amount, "Black"),
+            RouletteColor::Red => (2 * amount, "Red"),
+            RouletteColor::Green => ((ROULETTE_WHEEL_ITEMS - 1) as i64 * amount, "Green"),
+        }
     } else {
-        // Loss
-        (
-            db.subtract_bank_account_balance(uid, amount).await,
-            format!("🟥 Lost {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"),
-        )
+        (0, "")
     };
-    if let Err(e) = res {
+    if amount == 0 {
+        return Ok(());
+    }
+    if let Err(e) = db.add_bank_account_balance(uid, amount).await {
         let _ = msg.channel_id.say(ctx, e).await;
         return Ok(());
     }
@@ -222,10 +304,10 @@ async fn coinflip(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .send_message(ctx, |m| {
             m.add_embed(|e| {
                 e.author(|a| {
-                    a.name("Coin flip. 50% chance!")
-                        .icon_url("https://cdn.7tv.app/emote/61e63db277175547b425ce27/1x.gif")
+                    a.name("Win!")
+                        .icon_url("https://cdn.7tv.app/emote/628d8b64ed0a40a5ec5f4810/1x.gif")
                 })
-                .title(reply)
+                .title(format!("{result}! Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"))
             })
         })
         .await;

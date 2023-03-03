@@ -3995,13 +3995,14 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "cron",
  "dotenvy",
+ "lazy_static",
  "prisma-client-rust",
  "rand 0.8.5",
  "reqwest",
@@ -4013,6 +4014,7 @@ dependencies = [
  "shuttle-service",
  "strum 0.24.1",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

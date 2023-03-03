@@ -2,6 +2,7 @@ use std::{future::Future, sync::Arc};
 
 use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
+use tracing::warn;
 
 use crate::prisma::*;
 
@@ -13,7 +14,7 @@ pub trait WallaceDBClient {
         FFut: Future<Output = Result<T>> + Send,
         F: FnOnce(Arc<PrismaClient>) -> FFut + Send;
     fn log_error(&self, err: impl std::error::Error, msg: &'static str) -> Error {
-        println!("{err}");
+        warn!("Database error: {err}");
         anyhow!(msg)
     }
     fn positive(&self, amount: i64) -> Result<()> {
