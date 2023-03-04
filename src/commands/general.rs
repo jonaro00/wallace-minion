@@ -1,6 +1,7 @@
 use async_openai::types::{
     ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
-    CreateChatCompletionRequestArgs, CreateModerationRequestArgs, Role, TextModerationModel,
+    CreateChatCompletionRequestArgs, CreateImageRequestArgs, CreateModerationRequestArgs,
+    ImageData, ImageSize, ResponseFormat, Role, TextModerationModel,
 };
 use serenity::{
     client::Context,
@@ -14,7 +15,7 @@ use serenity::{
 use crate::discord::{get_openai, WALLACE_VERSION};
 
 #[group]
-#[commands(ping, version, ai, speak, riddle, delete)]
+#[commands(ping, version, ai, dalle, speak, riddle, delete)]
 struct General;
 
 #[command]
@@ -77,11 +78,12 @@ impl WallaceAIConv {
             self.0.remove(1);
         }
     }
-    fn _reset(&mut self) {
+    fn reset(&mut self) {
         *self = Self::default();
     }
 }
 #[command]
+#[sub_commands(reset)]
 #[description("Ask me anything! ChatGPT will answer for me tho...")]
 #[usage("<text>")]
 async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
@@ -135,9 +137,6 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     // let us = response.usage.unwrap();
     // println!("tokens {} + {}", us.prompt_tokens, us.completion_tokens);
 
-    if response.choices.is_empty() {
-        return Ok(());
-    }
     if let Ok(typing) = typing {
         let _ = typing.stop();
     }
@@ -158,6 +157,73 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .build()
         .unwrap();
     conv.add(user_msg, assistant_msg);
+    Ok(())
+}
+
+#[command]
+#[description("Reset the context of the conversation")]
+async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
+    // lock the current channel conversation
+    let ai = get_openai(ctx).await;
+    let mut l1 = ai.lock().await;
+    let m = l1.1.entry(msg.channel_id.0).or_default().clone();
+    drop(l1);
+    let mut conv = m.lock().await;
+    conv.reset();
+    let _ = msg.react(ctx, '🫡').await;
+    Ok(())
+}
+
+#[command]
+#[description("Make a DALLE image")]
+#[usage("<text>")]
+async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let ai = get_openai(ctx).await;
+    let l1 = ai.lock().await;
+    let client = l1.0.clone();
+    drop(l1);
+
+    let input = args.rest();
+    let typing = ctx.http.start_typing(msg.channel_id.0);
+
+    // check moderation policy
+    let request = CreateModerationRequestArgs::default()
+        .input(input)
+        .model(TextModerationModel::Latest)
+        .build()
+        .unwrap();
+    let response = client.moderations().create(request).await?;
+    if response.results[0].flagged {
+        let _ = msg
+            .channel_id
+            .say(
+                ctx,
+                "❌ This prompt was flagged breaking OpenAI's content policy.",
+            )
+            .await;
+        return Ok(());
+    }
+
+    // chat completion request
+    let request = CreateImageRequestArgs::default()
+        .prompt(input)
+        .n(1)
+        .response_format(ResponseFormat::Url)
+        .size(ImageSize::S512x512)
+        .user("async-openai")
+        .build()
+        .unwrap();
+
+    let response = client.images().create(request).await?;
+
+    if let Ok(typing) = typing {
+        let _ = typing.stop();
+    }
+    let reply = match &**response.data.get(0).ok_or("No images returned")? {
+        ImageData::Url(u) => u,
+        ImageData::B64Json(u) => u, // change this if it will be used
+    };
+    msg.channel_id.say(ctx, reply).await?;
     Ok(())
 }
 
