@@ -1,5 +1,6 @@
 use async_openai::types::{
-    ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role,
+    ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
+    CreateChatCompletionRequestArgs, CreateModerationRequestArgs, Role, TextModerationModel,
 };
 use serenity::{
     client::Context,
@@ -44,40 +45,119 @@ async fn version(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+pub struct WallaceAIConv(Vec<ChatCompletionRequestMessage>);
+impl Default for WallaceAIConv {
+    fn default() -> Self {
+        Self(vec![ChatCompletionRequestMessageArgs::default()
+            .role(Role::System)
+            .content(
+                "
+                You are a minion version of Wallace from the animated series Wallace and Gromit.
+                You are a mischievous and cocky helper minion.
+                You love swinging your hammer.
+                You are interested in hammers and crabs, and run a casino in your free time.
+                You always add a small comment about your personality in your responses to messages.
+                ",
+            )
+            .build()
+            .unwrap()])
+    }
+}
+impl WallaceAIConv {
+    fn add(
+        &mut self,
+        prompt: ChatCompletionRequestMessage,
+        reply: ChatCompletionRequestMessage,
+    ) -> () {
+        self.0.push(prompt);
+        self.0.push(reply);
+    }
+    fn trim_history(&mut self) {
+        while self.0.len() > 11 {
+            self.0.remove(1);
+        }
+    }
+    fn _reset(&mut self) {
+        *self = Self::default();
+    }
+}
 #[command]
 #[description("Ask me anything! ChatGPT will answer for me tho...")]
+#[usage("<text>")]
 async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let client = get_openai(ctx).await;
+    // lock the current channel conversation
+    let ai = get_openai(ctx).await;
+    let mut l1 = ai.lock().await;
+    let client = l1.0.clone();
+    let m = l1.1.entry(msg.channel_id.0).or_default().clone();
+    drop(l1);
+    let mut conv = m.lock().await;
+    conv.trim_history();
+
+    let input = args.rest();
     let typing = ctx.http.start_typing(msg.channel_id.0);
+
+    // check moderation policy
+    let request = CreateModerationRequestArgs::default()
+        .input(input)
+        .model(TextModerationModel::Latest)
+        .build()
+        .unwrap();
+    let response = client.moderations().create(request).await?;
+    if response.results[0].flagged {
+        let _ = msg
+            .channel_id
+            .say(
+                ctx,
+                "❌ This prompt was flagged breaking OpenAI's content policy.",
+            )
+            .await;
+        return Ok(());
+    }
+
+    // chat completion request
+    let mut v = conv.0.clone();
+    let user_msg = ChatCompletionRequestMessageArgs::default()
+        .role(Role::User)
+        .content(input)
+        .build()
+        .unwrap();
+    v.push(user_msg.clone());
     let request = CreateChatCompletionRequestArgs::default()
         .model("gpt-3.5-turbo")
-        .messages([
-            ChatCompletionRequestMessageArgs::default()
-                .role(Role::System)
-                .content("
-                    You are a minion version of Wallace from the animated series Wallace and Gromit.
-                    You are a mischievous and cocky helper minion.
-                    You love swinging your hammer.
-                    You are interested in hammers and crabs, and run a casino in your free time.
-                    You always add a small comment about your personality in your responses to messages.
-                    ")
-                .build()?,
-            ChatCompletionRequestMessageArgs::default()
-                .role(Role::User)
-                .content(args.rest())
-                .build()?,
-        ])
-        .build()?;
+        .messages(v)
+        .build()
+        .unwrap();
 
     let response = client.chat().create(request).await?;
+
+    // // Debug
+    // let us = response.usage.unwrap();
+    // println!("tokens {} + {}", us.prompt_tokens, us.completion_tokens);
+
     if response.choices.is_empty() {
         return Ok(());
     }
-    let resp = &response.choices[0].message.content;
     if let Ok(typing) = typing {
         let _ = typing.stop();
     }
-    msg.channel_id.say(ctx, resp).await?;
+    let reply = &response
+        .choices
+        .get(0)
+        .ok_or("No choices returned")?
+        .message
+        .content;
+    let s: String = format!("`Wallace AI:`\n{reply}")
+        .chars()
+        .take(2000)
+        .collect();
+    msg.channel_id.say(ctx, s).await?;
+    let assistant_msg = ChatCompletionRequestMessageArgs::default()
+        .role(Role::Assistant)
+        .content(reply)
+        .build()
+        .unwrap();
+    conv.add(user_msg, assistant_msg);
     Ok(())
 }
 

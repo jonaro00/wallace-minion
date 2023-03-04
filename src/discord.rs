@@ -26,7 +26,7 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use strum::EnumString;
-use tokio::{task::JoinHandle, time::Duration};
+use tokio::{sync::Mutex, task::JoinHandle, time::Duration};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -34,7 +34,7 @@ use crate::{
         bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
         emote::EMOTE_GROUP,
-        general::GENERAL_GROUP,
+        general::{WallaceAIConv, GENERAL_GROUP},
         riot::{lol_report, LOL_GROUP, TFT_GROUP},
         scheduling::SCHEDULING_GROUP,
         spells::{random_name, SPELLS_GROUP},
@@ -128,7 +128,10 @@ pub async fn build_bot(
             &riot_token_tft,
         )));
         data.insert::<WallaceDB>(Arc::new(db));
-        data.insert::<WallaceOpenAI>(Arc::new(OpenAIClient::new().with_api_key(openai_token)));
+        data.insert::<WallaceOpenAI>(Arc::new(Mutex::new((
+            OpenAIClient::new().with_api_key(openai_token),
+            Default::default(),
+        ))));
     } // Release lock
 
     client
@@ -162,9 +165,11 @@ pub async fn get_db_handler(ctx: &Context) -> Arc<PrismaClient> {
 
 struct WallaceOpenAI;
 impl TypeMapKey for WallaceOpenAI {
-    type Value = Arc<OpenAIClient>;
+    type Value = Arc<Mutex<(OpenAIClient, HashMap<u64, Arc<Mutex<WallaceAIConv>>>)>>;
 }
-pub async fn get_openai(ctx: &Context) -> Arc<OpenAIClient> {
+pub async fn get_openai(
+    ctx: &Context,
+) -> Arc<Mutex<(OpenAIClient, HashMap<u64, Arc<Mutex<WallaceAIConv>>>)>> {
     ctx.data
         .read()
         .await
@@ -215,7 +220,9 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content.to_uppercase().contains("WALLACE") {
+        if msg.content.to_uppercase().contains("WALLACE")
+            && msg.author != ctx.cache.current_user().into()
+        {
             let mut rng: StdRng = SeedableRng::from_entropy();
             let _ = msg
                 .react(ctx, REACTIONS[rng.gen_range(0..REACTIONS.len())])
