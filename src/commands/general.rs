@@ -12,7 +12,10 @@ use serenity::{
     model::prelude::Message,
 };
 
-use crate::discord::{get_openai, WALLACE_VERSION};
+use crate::{
+    discord::{get_openai, WALLACE_VERSION},
+    services::do_payment,
+};
 
 #[group]
 #[commands(ping, version, ai, dalle, speak, riddle, delete)]
@@ -175,9 +178,13 @@ async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-#[description("Make a DALLE image")]
+#[description("Make a DALL-E image")]
 #[usage("<text>")]
 async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    if do_payment(ctx, msg, 1).await.is_err() {
+        return Ok(());
+    }
+
     let ai = get_openai(ctx).await;
     let l1 = ai.lock().await;
     let client = l1.0.clone();

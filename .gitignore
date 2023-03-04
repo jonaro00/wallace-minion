@@ -2,3 +2,4 @@ src/prisma.rs
 target*
 .env*
 Secrets*.toml
+release.sh

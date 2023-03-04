@@ -314,7 +314,7 @@ async fn help_command(
     Ok(())
 }
 
-const WEEKLY_PAYOUT: i64 = 6;
+const WEEKLY_PAYOUT: i64 = 15;
 async fn built_in_tasks(ctx: Context) {
     let db = get_db_handler(&ctx).await;
     // Weekly payout
