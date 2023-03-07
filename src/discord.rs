@@ -6,11 +6,12 @@ use std::{
 };
 
 use async_openai::Client as OpenAIClient;
+use async_trait::async_trait;
+use aws_sdk_polly::Client as PollyClient;
 use chrono::Utc;
 use lazy_static::lazy_static;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
-    async_trait,
     client::{Client as DiscordClient, Context, EventHandler},
     framework::standard::{
         buckets::LimitedFor,
@@ -119,6 +120,9 @@ pub async fn build_bot(
         .expect("Database connection failed.");
     info!("Connected to database!");
 
+    let config = aws_config::load_from_env().await;
+    let polly_client = PollyClient::new(&config);
+
     // Insert shared data
     {
         // Open the data lock in write mode, so that entries can be inserted.
@@ -132,6 +136,7 @@ pub async fn build_bot(
             OpenAIClient::new().with_api_key(openai_token),
             Default::default(),
         ))));
+        data.insert::<WallacePolly>(Arc::new(polly_client));
     } // Release lock
 
     client
@@ -175,6 +180,21 @@ pub async fn get_openai(
         .await
         .get::<WallaceOpenAI>()
         .expect("Expected OpenAI Client in TypeMap.")
+        .clone()
+}
+
+struct WallacePolly;
+impl TypeMapKey for WallacePolly {
+    type Value = Arc<PollyClient>;
+}
+pub async fn get_polly(
+    ctx: &Context,
+) -> Arc<PollyClient> {
+    ctx.data
+        .read()
+        .await
+        .get::<WallacePolly>()
+        .expect("Expected AWS Polly Client in TypeMap.")
         .clone()
 }
 

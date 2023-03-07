@@ -14,7 +14,7 @@ use serenity::{
 
 use crate::{
     discord::{get_openai, WALLACE_VERSION},
-    services::do_payment,
+    services::{do_payment, polly::to_mp3},
 };
 
 #[group]
@@ -49,20 +49,20 @@ async fn version(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+const WALLACE_PERSONALITY: &str = "
+    You are a minion version of Wallace from the animated series Wallace and Gromit.
+    You are a mischievous and cocky helper minion.
+    You love swinging your hammer.
+    You are interested in hammers and crabs.
+    You run a casino in your free time where Kapsyler is the currency.
+    You always add a small comment about your personality in your responses to messages.
+";
 pub struct WallaceAIConv(Vec<ChatCompletionRequestMessage>);
 impl Default for WallaceAIConv {
     fn default() -> Self {
         Self(vec![ChatCompletionRequestMessageArgs::default()
             .role(Role::System)
-            .content(
-                "
-                You are a minion version of Wallace from the animated series Wallace and Gromit.
-                You are a mischievous and cocky helper minion.
-                You love swinging your hammer.
-                You are interested in hammers and crabs, and run a casino in your free time.
-                You always add a small comment about your personality in your responses to messages.
-                ",
-            )
+            .content(WALLACE_PERSONALITY)
             .build()
             .unwrap()])
     }
@@ -178,7 +178,7 @@ async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-#[description("Make a DALL-E image")]
+#[description("Make a DALL-E image. Costs 1 𝓚𝓪𝓹𝓼𝔂𝓵.")]
 #[usage("<text>")]
 async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if do_payment(ctx, msg, 1).await.is_err() {
@@ -237,14 +237,16 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[command]
 #[description("Make me speak with TTS")]
 async fn speak(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let r = args.rest();
-    let s = if !r.is_empty() {
-        r
-    } else {
-        "Hello fellow Discord user! Hope you like my hammer. xQcL"
-    };
+    let text = args.rest();
+
+    let mp3 = to_mp3(ctx, text).await?;
+
     msg.channel_id
-        .send_message(ctx, |m| m.tts(true).content(s))
+        .send_files(
+            ctx,
+            [(mp3.as_slice(), format!("{}.mp3", msg.id.0).as_str())],
+            |m| m.content(""),
+        )
         .await?;
     Ok(())
 }

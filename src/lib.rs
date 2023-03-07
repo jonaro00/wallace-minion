@@ -27,6 +27,19 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     let openai_token = secret_store
         .get("OPENAI_TOKEN")
         .expect("OpenAI token missing! (env variable `OPENAI_TOKEN`)");
+    let aws_key_id = secret_store
+        .get("AWS_ACCESS_KEY_ID")
+        .expect("AWS Access Key Id missing! (env variable `AWS_ACCESS_KEY_ID`)");
+    let aws_secret = secret_store
+        .get("AWS_SECRET_ACCESS_KEY")
+        .expect("AWS Secret Access Key missing! (env variable `AWS_SECRET_ACCESS_KEY`)");
+    let aws_region = secret_store
+        .get("AWS_REGION")
+        .expect("AWS Region missing! (env variable `AWS_REGION`)");
+
+    std::env::set_var("AWS_ACCESS_KEY_ID", aws_key_id);
+    std::env::set_var("AWS_SECRET_ACCESS_KEY", aws_secret);
+    std::env::set_var("AWS_REGION", aws_region);
 
     let client = build_bot(
         discord_token,

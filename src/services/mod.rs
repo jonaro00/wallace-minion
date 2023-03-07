@@ -1,4 +1,5 @@
 pub mod cool_text;
+pub mod polly;
 pub mod riot_api;
 pub mod seven_tv;
 
