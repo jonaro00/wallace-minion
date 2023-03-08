@@ -27,6 +27,7 @@ use serenity::{
     },
     prelude::TypeMapKey,
 };
+use songbird::SerenityInit;
 use strum::EnumString;
 use tokio::{sync::Mutex, task::JoinHandle, time::Duration};
 use tracing::{error, info, warn};
@@ -40,6 +41,7 @@ use crate::{
         riot::{lol_report, LOL_GROUP, TFT_GROUP},
         scheduling::SCHEDULING_GROUP,
         spells::{random_name, SPELLS_GROUP},
+        voice::VOICE_GROUP,
     },
     database::WallaceDBClient,
     prisma::{self, new_client_with_url, PrismaClient},
@@ -100,6 +102,7 @@ pub async fn build_bot(
         .group(&BANK_GROUP)
         .group(&SPELLS_GROUP)
         .group(&EMOTE_GROUP)
+        .group(&VOICE_GROUP)
         .group(&COOLTEXT_GROUP)
         .group(&SCHEDULING_GROUP)
         .group(&LOL_GROUP)
@@ -113,6 +116,7 @@ pub async fn build_bot(
     )
     .event_handler(Handler)
     .framework(framework)
+    .register_songbird()
     .await
     .expect("Error creating Discord client");
 

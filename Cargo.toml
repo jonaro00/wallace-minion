@@ -29,15 +29,17 @@ riven = { git = "https://github.com/jonaro00/Riven" }
 serde = "1"
 serde_json = "1"
 serenity = { version = "0.11", default-features = false, features = [
-    "chrono",
-    "standard_framework",
     "cache",
-    "rustls_backend",
+    "chrono",
     "gateway",
+    "rustls_backend",
+    "standard_framework",
+    "voice",
 ] }
 shuttle-runtime = "0.12.0"
 shuttle-secrets = "0.12.0"
 shuttle-serenity = "0.12.0"
+songbird = "0.3.1"
 strum = "0.24"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
