@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::anyhow;
 use async_openai::Client as OpenAIClient;
 use async_trait::async_trait;
 use aws_sdk_polly::Client as PollyClient;
@@ -41,7 +42,7 @@ use crate::{
         spells::{random_name, SPELLS_GROUP},
     },
     database::WallaceDBClient,
-    prisma::{new_client_with_url, PrismaClient},
+    prisma::{self, new_client_with_url, PrismaClient},
     services::{riot_api::RiotAPIClients, set_server_name},
 };
 
@@ -137,6 +138,9 @@ pub async fn build_bot(
             Default::default(),
         ))));
         data.insert::<WallacePolly>(Arc::new(polly_client));
+        let (tx, rx) = tokio::sync::mpsc::channel::<()>(1);
+        data.insert::<TaskSignal>(Arc::new(tx));
+        data.insert::<TaskSignalRx>(rx);
     } // Release lock
 
     client
@@ -187,15 +191,30 @@ struct WallacePolly;
 impl TypeMapKey for WallacePolly {
     type Value = Arc<PollyClient>;
 }
-pub async fn get_polly(
-    ctx: &Context,
-) -> Arc<PollyClient> {
+pub async fn get_polly(ctx: &Context) -> Arc<PollyClient> {
     ctx.data
         .read()
         .await
         .get::<WallacePolly>()
         .expect("Expected AWS Polly Client in TypeMap.")
         .clone()
+}
+
+struct TaskSignal;
+impl TypeMapKey for TaskSignal {
+    type Value = Arc<tokio::sync::mpsc::Sender<()>>;
+}
+pub async fn get_task_signal(ctx: &Context) -> Arc<tokio::sync::mpsc::Sender<()>> {
+    ctx.data
+        .read()
+        .await
+        .get::<TaskSignal>()
+        .expect("Expected Task mpsc Sender in TypeMap.")
+        .clone()
+}
+struct TaskSignalRx;
+impl TypeMapKey for TaskSignalRx {
+    type Value = tokio::sync::mpsc::Receiver<()>;
 }
 
 use serenity::builder::CreateApplicationCommand;
@@ -349,6 +368,7 @@ async fn built_in_tasks(ctx: Context) {
             .await;
             info!("Time for veckopeng.");
             for u in db.get_all_users().await.expect("Could not fetch users") {
+                info!("Veckopeng for {}.", u.id as u64);
                 let _ = db
                     .add_bank_account_balance(u.id as u64, WEEKLY_PAYOUT)
                     .await;
@@ -358,27 +378,21 @@ async fn built_in_tasks(ctx: Context) {
     });
 }
 
-#[derive(EnumString)]
-pub enum ScheduleTask {
-    #[strum(serialize = "say")]
-    Say,
-    #[strum(serialize = "defaultname")]
-    DefaultName,
-    #[strum(serialize = "randomname")]
-    RandomName,
-    #[strum(serialize = "lolweekly")]
-    LolWeekly,
-}
-
 async fn schedule_loop(ctx: Context) {
     built_in_tasks(ctx.clone()).await;
     let mut running_tasks: HashMap<i32, JoinHandle<()>> = HashMap::new();
     let db = get_db_handler(&ctx).await;
+    let mut rx = ctx
+        .data
+        .write()
+        .await
+        .remove::<TaskSignalRx>()
+        .expect("brudda");
     loop {
         let tasks = match db.get_all_tasks().await {
             Ok(tasks) => tasks,
             Err(e) => {
-                error!("Failed to get tasks: {e:?}. Cancelling task loop.");
+                error!("Failed to get tasks: {e:?}. Retrying in 60 secs.");
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 continue;
             }
@@ -398,64 +412,16 @@ async fn schedule_loop(ctx: Context) {
                 let db = db.clone();
                 tokio::spawn(async move {
                     let s = cron::Schedule::from_str(&t.cron).expect("Invalid cron string");
-                    for next in s.upcoming(Utc) {
-                        tokio::time::sleep(
-                            (next - Utc::now())
-                                .to_std()
-                                .expect("Failed time conversion"),
-                        )
-                        .await;
-                        let task = match t.cmd.parse::<ScheduleTask>() {
-                            Ok(t) => t,
-                            Err(_) => break,
-                        };
-                        match task {
-                            ScheduleTask::Say => {
-                                let arg = match t.arg {
-                                    Some(ref s) => s,
-                                    None => break,
-                                };
-                                let _ = ChannelId(t.channel_id as u64).say(&ctx, arg).await;
-                            }
-                            ScheduleTask::RandomName => {
-                                let g = match ctx
-                                    .cache
-                                    .channel(t.channel_id as u64)
-                                    .and_then(|c| c.guild())
-                                    .and_then(|g| g.guild(&ctx))
-                                {
-                                    Some(g) => g,
-                                    None => break,
-                                };
-                                if let Ok((s, o)) = db.get_guild_random_names(g.id.0).await {
-                                    let _ =
-                                        set_server_name(&ctx, g, None, &random_name(s, o)).await;
-                                }
-                            }
-                            ScheduleTask::DefaultName => {
-                                let g = match ctx
-                                    .cache
-                                    .channel(t.channel_id as u64)
-                                    .and_then(|c| c.guild())
-                                    .and_then(|g| g.guild(&ctx))
-                                {
-                                    Some(g) => g,
-                                    None => break,
-                                };
-                                if let Ok(s) = db.get_guild_default_name(g.id.0).await {
-                                    let _ = set_server_name(&ctx, g, None, &s).await;
-                                }
-                            }
-                            ScheduleTask::LolWeekly => {
-                                let gc = match ctx
-                                    .cache
-                                    .channel(t.channel_id as u64)
-                                    .and_then(|c| c.guild())
-                                {
-                                    Some(gc) => gc,
-                                    None => break,
-                                };
-                                let _ = lol_report(&ctx, gc).await;
+                    if let Ok(task) = t.cmd.parse::<ScheduleTask>() {
+                        for next in s.upcoming(Utc) {
+                            tokio::time::sleep(
+                                (next - Utc::now())
+                                    .to_std()
+                                    .expect("Failed time conversion"),
+                            )
+                            .await;
+                            if task.run(&ctx, &t).await.is_err() {
+                                break;
                             }
                         }
                     }
@@ -466,6 +432,74 @@ async fn schedule_loop(ctx: Context) {
                 })
             });
         }
-        tokio::time::sleep(Duration::from_secs(30)).await;
+        rx.recv().await.expect("channel to be open");
+        warn!("New task loop");
+    }
+}
+
+#[derive(EnumString)]
+pub enum ScheduleTask {
+    #[strum(serialize = "say")]
+    Say,
+    #[strum(serialize = "defaultname")]
+    DefaultName,
+    #[strum(serialize = "randomname")]
+    RandomName,
+    #[strum(serialize = "lolweekly")]
+    LolWeekly,
+}
+
+impl ScheduleTask {
+    pub async fn run(&self, ctx: &Context, data: &prisma::task::Data) -> anyhow::Result<()> {
+        let db = get_db_handler(ctx).await;
+        match self {
+            ScheduleTask::Say => {
+                let arg = match data.arg {
+                    Some(ref s) => s,
+                    None => return Err(anyhow!("")),
+                };
+                let _ = ChannelId(data.channel_id as u64).say(ctx, arg).await;
+            }
+            ScheduleTask::RandomName => {
+                let g = match ctx
+                    .cache
+                    .channel(data.channel_id as u64)
+                    .and_then(|c| c.guild())
+                    .and_then(|g| g.guild(ctx))
+                {
+                    Some(g) => g,
+                    None => return Err(anyhow!("")),
+                };
+                if let Ok((s, o)) = db.get_guild_random_names(g.id.0).await {
+                    let _ = set_server_name(ctx, g, None, &random_name(s, o)).await;
+                }
+            }
+            ScheduleTask::DefaultName => {
+                let g = match ctx
+                    .cache
+                    .channel(data.channel_id as u64)
+                    .and_then(|c| c.guild())
+                    .and_then(|g| g.guild(ctx))
+                {
+                    Some(g) => g,
+                    None => return Err(anyhow!("")),
+                };
+                if let Ok(s) = db.get_guild_default_name(g.id.0).await {
+                    let _ = set_server_name(ctx, g, None, &s).await;
+                }
+            }
+            ScheduleTask::LolWeekly => {
+                let gc = match ctx
+                    .cache
+                    .channel(data.channel_id as u64)
+                    .and_then(|c| c.guild())
+                {
+                    Some(gc) => gc,
+                    None => return Err(anyhow!("")),
+                };
+                let _ = lol_report(ctx, gc).await;
+            }
+        };
+        Ok(())
     }
 }

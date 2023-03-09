@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,6 +15,7 @@ async-openai = { git = "https://github.com/jonaro00/async-openai" }
 async-trait = "0.1"
 aws-config = "0.54"
 aws-sdk-polly = "0.24"
+base64 = "0.21"
 chrono = { version = "0.4.23", default-features = false }
 cron = "0.12"
 dotenvy = "0.15"

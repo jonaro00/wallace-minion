@@ -11,7 +11,7 @@ use serenity::{
 
 use crate::{
     database::WallaceDBClient,
-    discord::{get_db_handler, ScheduleTask},
+    discord::{get_db_handler, get_task_signal, ScheduleTask},
 };
 
 #[group]
@@ -81,13 +81,16 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     }
 
     let db = get_db_handler(ctx).await;
+    let tx = get_task_signal(ctx).await;
+    let res = db.create_task(cron, cmd, arg, msg.channel_id.0).await;
+    if res.is_ok() && tx.capacity() > 0 {
+        tx.send(()).await.expect("channel to be open");
+    }
     let _ = msg
         .channel_id
         .say(
             ctx,
-            db.create_task(cron, cmd, arg, msg.channel_id.0)
-                .await
-                .map(|_| "Added".to_owned())
+            res.map(|t| format!("Added task. ID: {}", t.id))
                 .unwrap_or_else(|e| e.to_string()),
         )
         .await;
@@ -107,13 +110,16 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         return Ok(());
     }
     let db = get_db_handler(ctx).await;
+    let tx = get_task_signal(ctx).await;
+    let res = db.delete_task(id.unwrap()).await;
+    if res.is_ok() && tx.capacity() > 0 {
+        tx.send(()).await.expect("channel to be open");
+    }
     let _ = msg
         .channel_id
         .say(
             ctx,
-            db.delete_task(id.unwrap())
-                .await
-                .map(|_| "Removed".to_owned())
+            res.map(|_| "Removed".to_owned())
                 .unwrap_or_else(|e| e.to_string()),
         )
         .await;

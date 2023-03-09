@@ -215,7 +215,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let request = CreateImageRequestArgs::default()
         .prompt(input)
         .n(1)
-        .response_format(ResponseFormat::Url)
+        .response_format(ResponseFormat::B64Json)
         .size(ImageSize::S512x512)
         .user("async-openai")
         .build()
@@ -227,10 +227,22 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         let _ = typing.stop();
     }
     let reply = match &**response.data.get(0).ok_or("No images returned")? {
-        ImageData::Url(u) => u,
-        ImageData::B64Json(u) => u, // change this if it will be used
+        ImageData::Url(_) => panic!("url response not used"),
+        ImageData::B64Json(b64) => {
+            use base64::{engine::general_purpose, Engine as _};
+            let v = general_purpose::STANDARD
+                .decode(b64.as_str())
+                .map_err(|_| "Invalid base64")?;
+            v
+        }
     };
-    msg.channel_id.say(ctx, reply).await?;
+    msg.channel_id
+        .send_files(
+            ctx,
+            [(reply.as_slice(), format!("{}.png", msg.id.0).as_str())],
+            |m| m,
+        )
+        .await?;
     Ok(())
 }
 

@@ -37,6 +37,7 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
         .get("AWS_REGION")
         .expect("AWS Region missing! (env variable `AWS_REGION`)");
 
+    // To be consumed by `aws_config::load_from_env()`
     std::env::set_var("AWS_ACCESS_KEY_ID", aws_key_id);
     std::env::set_var("AWS_SECRET_ACCESS_KEY", aws_secret);
     std::env::set_var("AWS_REGION", aws_region);
