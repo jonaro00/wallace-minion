@@ -3,10 +3,13 @@ pub mod polly;
 pub mod riot_api;
 pub mod seven_tv;
 
+use std::num::NonZeroU64;
+
 use anyhow::anyhow;
 use chrono::Duration;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
+    builder::{CreateEmbed, CreateEmbedAuthor, CreateMessage, EditGuild, EditMember},
     client::Context,
     framework::standard::CommandResult,
     model::prelude::{Guild, Message, Timestamp, UserId},
@@ -16,13 +19,13 @@ use cool_text::{to_cool_text, Font};
 
 use crate::{database::WallaceDBClient, discord::get_db_handler};
 
-pub async fn set_server_name(
+pub async fn set_server_name<'a>(
     ctx: &Context,
     mut guild: Guild,
     reply_to: Option<&Message>,
     name: &str,
 ) -> CommandResult {
-    guild.edit(ctx, |g| g.name(name)).await?;
+    guild.edit(ctx, EditGuild::new().name(name)).await?;
     if let Some(msg) = reply_to {
         msg.channel_id
             .say(ctx, format!("Set server name to '{}'", name))
@@ -53,14 +56,16 @@ const BONK_EMOTES: &[&str] = &[
 pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) -> CommandResult {
     let gid = msg.guild_id.ok_or("Failed to get guild")?;
     if let Err(e) = gid
-        .edit_member(ctx, UserId(uid), |m| {
-            m.disable_communication_until(
+        .edit_member(
+            ctx,
+            UserId(NonZeroU64::new(uid).expect("not 0")),
+            EditMember::new().disable_communication_until(
                 Timestamp::now()
                     .checked_add_signed(Duration::seconds(duration as i64))
                     .expect("Failed to add date")
                     .to_rfc3339(),
-            )
-        })
+            ),
+        )
         .await
     {
         let s = e.to_string();
@@ -85,13 +90,18 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) ->
         .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| a.name(format!("{}🔨🙂", to_cool_text("BONK!", Font::BoldScript))))
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new(format!(
+                        "{}🔨🙂",
+                        to_cool_text("BONK!", Font::BoldScript)
+                    )))
                     .title(format!("Timed out {tn} for {duration} seconds."))
-                    .thumbnail(BONK_EMOTES[rng.gen_range(0..BONK_EMOTES.len())])
-            })
-        })
+                    .thumbnail(BONK_EMOTES[rng.gen_range(0..BONK_EMOTES.len())]),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -99,7 +109,11 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) ->
 pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResult {
     let gid = msg.guild_id.ok_or("Failed to get guild")?;
     if let Err(e) = gid
-        .edit_member(ctx, UserId(uid), |m| m.enable_communication())
+        .edit_member(
+            ctx,
+            UserId(NonZeroU64::new(uid).expect("not 0")),
+            EditMember::new().enable_communication(),
+        )
         .await
     {
         let s = e.to_string();
@@ -123,13 +137,18 @@ pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResul
         .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| a.name(format!("{}🔨🙂", to_cool_text("UNBONK!", Font::BoldScript))))
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new(format!(
+                        "{}🔨🙂",
+                        to_cool_text("UNBONK!", Font::BoldScript)
+                    )))
                     .title(format!("{tn} is free now."))
-                    .thumbnail("https://cdn.7tv.app/emote/60ed8bf39dd7fe3b46c62e0f/2x.gif")
-            })
-        })
+                    .thumbnail("https://cdn.7tv.app/emote/60ed8bf39dd7fe3b46c62e0f/2x.gif"),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -137,7 +156,11 @@ pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResul
 pub async fn nickname_user(ctx: &Context, msg: &Message, uid: u64, nick: String) -> CommandResult {
     let gid = msg.guild_id.ok_or("Failed to get guild")?;
     if let Err(e) = gid
-        .edit_member(ctx, UserId(uid), |m| m.nickname(nick))
+        .edit_member(
+            ctx,
+            UserId(NonZeroU64::new(uid).expect("not 0")),
+            EditMember::new().nickname(nick),
+        )
         .await
     {
         let s = e.to_string();
@@ -161,22 +184,23 @@ pub async fn nickname_user(ctx: &Context, msg: &Message, uid: u64, nick: String)
 pub async fn do_payment(ctx: &Context, msg: &Message, amount: i64) -> CommandResult {
     let db = get_db_handler(ctx).await;
     if let Err(e) = db
-        .subtract_bank_account_balance(msg.author.id.0, amount)
+        .subtract_bank_account_balance(msg.author.id.0.get(), amount)
         .await
     {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         Err(anyhow!("").into())
     } else {
         let _ = msg
             .channel_id
-            .send_message(ctx, |m| {
-                m.add_embed(|e| {
-                    e.author(|a| {
-                        a.icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif")
-                            .name(format!("-{amount} 𝓚"))
-                    })
-                })
-            })
+            .send_message(
+                ctx,
+                CreateMessage::new().add_embed(
+                    CreateEmbed::new().author(
+                        CreateEmbedAuthor::new(format!("-{amount} 𝓚"))
+                            .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif"),
+                    ),
+                ),
+            )
             .await;
         Ok(())
     }

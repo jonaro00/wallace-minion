@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
+    num::NonZeroU64,
     str::FromStr,
     sync::Arc,
 };
@@ -21,26 +22,25 @@ use serenity::{
         Args, CommandError, CommandGroup, CommandResult, DispatchError, HelpOptions,
         StandardFramework,
     },
+    gateway::ActivityData,
     http::Http,
-    model::prelude::{
-        Activity, ChannelId, GatewayIntents, GuildId, Message, Ready, ResumedEvent, UserId,
-    },
+    model::prelude::{ChannelId, GatewayIntents, GuildId, Message, Ready, ResumedEvent, UserId},
     prelude::TypeMapKey,
 };
-use songbird::SerenityInit;
+use songbird::Songbird;
 use strum::EnumString;
 use tokio::{sync::Mutex, task::JoinHandle, time::Duration};
 use tracing::{error, info, warn};
 
 use crate::{
     commands::{
-        bank::BANK_GROUP,
+        // bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
-        emote::EMOTE_GROUP,
+        // emote::EMOTE_GROUP,
         general::{WallaceAIConv, GENERAL_GROUP},
-        riot::{lol_report, LOL_GROUP, TFT_GROUP},
-        scheduling::SCHEDULING_GROUP,
-        spells::{random_name, SPELLS_GROUP},
+        // riot::{lol_report, LOL_GROUP, TFT_GROUP},
+        // scheduling::SCHEDULING_GROUP,
+        // spells::{random_name, SPELLS_GROUP},
         voice::VOICE_GROUP,
     },
     database::WallaceDBClient,
@@ -87,27 +87,28 @@ pub async fn build_bot(
     };
 
     let framework = StandardFramework::new()
-        .configure(|c| {
-            c.prefix(PREFIX)
-                .owners(owners)
-                .case_insensitivity(true)
-                .on_mention(Some(bot_id))
-        })
         .unrecognised_command(unknown_command_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
         .bucket("slots", |b| b.delay(10).limit_for(LimitedFor::Channel))
         .await
         .group(&GENERAL_GROUP)
-        .group(&BANK_GROUP)
-        .group(&SPELLS_GROUP)
-        .group(&EMOTE_GROUP)
+        // .group(&BANK_GROUP)
+        // .group(&SPELLS_GROUP)
+        // .group(&EMOTE_GROUP)
         .group(&VOICE_GROUP)
         .group(&COOLTEXT_GROUP)
-        .group(&SCHEDULING_GROUP)
-        .group(&LOL_GROUP)
-        .group(&TFT_GROUP)
+        // .group(&SCHEDULING_GROUP)
+        // .group(&LOL_GROUP)
+        // .group(&TFT_GROUP)
         .help(&HELP_COMMAND);
+    framework.configure(|c| {
+        c.prefix(PREFIX)
+            .owners(owners)
+            .case_insensitivity(true)
+            .on_mention(Some(bot_id))
+    });
+    let songbird = Songbird::serenity();
     let client = DiscordClient::builder(
         discord_token,
         GatewayIntents::non_privileged()
@@ -116,7 +117,7 @@ pub async fn build_bot(
     )
     .event_handler(Handler)
     .framework(framework)
-    .register_songbird()
+    .voice_manager_arc(songbird.clone())
     .await
     .expect("Error creating Discord client");
 
@@ -132,6 +133,7 @@ pub async fn build_bot(
     {
         // Open the data lock in write mode, so that entries can be inserted.
         let mut data = client.data.write().await;
+        data.insert::<WallaceSongbird>(songbird);
         data.insert::<WallaceRiot>(Arc::new(RiotAPIClients::new(
             &riot_token_lol,
             &riot_token_tft,
@@ -148,6 +150,19 @@ pub async fn build_bot(
     } // Release lock
 
     client
+}
+
+struct WallaceSongbird;
+impl TypeMapKey for WallaceSongbird {
+    type Value = Arc<Songbird>;
+}
+pub async fn get_songbird(ctx: &Context) -> Arc<Songbird> {
+    ctx.data
+        .read()
+        .await
+        .get::<WallaceSongbird>()
+        .expect("Expected Songbird in TypeMap.")
+        .clone()
 }
 
 struct WallaceRiot;
@@ -221,18 +236,18 @@ impl TypeMapKey for TaskSignalRx {
     type Value = tokio::sync::mpsc::Receiver<()>;
 }
 
-use serenity::builder::CreateApplicationCommand;
-use serenity::model::application::command::Command;
-use serenity::model::application::interaction::{Interaction, InteractionResponseType};
-use serenity::model::prelude::interaction::application_command::CommandDataOption;
+// use serenity::builder::CreateApplicationCommand;
+// use serenity::model::application::command::Command;
+// use serenity::model::application::interaction::{Interaction, InteractionResponseType};
+// use serenity::model::prelude::interaction::application_command::CommandDataOption;
 
-pub fn run(_options: &[CommandDataOption]) -> String {
-    "Pong!".to_string()
-}
+// pub fn run(_options: &[CommandDataOption]) -> String {
+//     "Pong!".to_string()
+// }
 
-pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-    command.name("ping").description("A ping command")
-}
+// pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
+//     command.name("ping").description("A ping command")
+// }
 
 const REACTIONS: &[char] = &['😳', '😏', '😊', '😎'];
 struct Handler;
@@ -241,16 +256,16 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, data: Ready) {
         info!("{} is connected!", data.user.name);
         let activity = if cfg!(debug_assertions) {
-            Activity::playing(format!(
+            ActivityData::playing(format!(
                 "on a construction site 🔨🙂 | {}",
                 *WALLACE_VERSION
             ))
         } else {
-            Activity::watching(format!("you 🔨🙂 | !help | {}", *WALLACE_VERSION))
+            ActivityData::watching(format!("you 🔨🙂 | !help | {}", *WALLACE_VERSION))
         };
-        let _ = ctx.set_activity(activity).await;
+        let _ = ctx.set_activity(Some(activity));
 
-        let _ = Command::create_global_application_command(ctx, register).await;
+        // let _ = Command::create_global_application_command(ctx, register).await;
     }
 
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
@@ -264,7 +279,7 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.content.to_uppercase().contains("WALLACE")
-            && msg.author != ctx.cache.current_user().into()
+            && msg.author != ctx.cache.current_user().to_owned().into()
         {
             let mut rng: StdRng = SeedableRng::from_entropy();
             let _ = msg
@@ -273,24 +288,24 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::ApplicationCommand(command) = interaction {
-            let content = run(&command.data.options);
+    // async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+    //     if let Interaction::ApplicationCommand(command) = interaction {
+    //         let content = run(&command.data.options);
 
-            if let Err(why) = command
-                .create_interaction_response(&ctx.http, |response| {
-                    response
-                        .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|message| {
-                            message.ephemeral(true).content(content)
-                        })
-                })
-                .await
-            {
-                warn!("Cannot respond to slash command: {}", why);
-            }
-        }
-    }
+    //         if let Err(why) = command
+    //             .create_interaction_response(&ctx.http, |response| {
+    //                 response
+    //                     .kind(InteractionResponseType::ChannelMessageWithSource)
+    //                     .interaction_response_data(|message| {
+    //                         message.ephemeral(true).content(content)
+    //                     })
+    //             })
+    //             .await
+    //         {
+    //             warn!("Cannot respond to slash command: {}", why);
+    //         }
+    //     }
+    // }
 }
 
 #[hook]

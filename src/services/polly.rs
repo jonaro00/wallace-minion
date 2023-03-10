@@ -8,8 +8,7 @@ pub async fn to_mp3(ctx: &Context, text: impl Into<String>) -> CommandResult<Vec
 
     let resp = polly_client
         .synthesize_speech()
-        .output_format(OutputFormat::Pcm)
-        // .sample_rate("16000")
+        .output_format(OutputFormat::Mp3)
         .text(text)
         .voice_id(VoiceId::Brian)
         .send()

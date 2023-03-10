@@ -4,6 +4,7 @@ use async_openai::types::{
     ImageData, ImageSize, ResponseFormat, Role, TextModerationModel,
 };
 use serenity::{
+    builder::{CreateAttachment, CreateEmbed, CreateEmbedAuthor, CreateMessage},
     client::Context,
     framework::standard::{
         macros::{command, group},
@@ -13,6 +14,7 @@ use serenity::{
 };
 
 use crate::{
+    commands::voice::play_text_voice,
     discord::{get_openai, WALLACE_VERSION},
     services::{do_payment, polly::to_mp3},
 };
@@ -24,7 +26,7 @@ struct General;
 #[command]
 #[description("Challenge me to a game of table tennis! (and check if I'm alive)")]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    if msg.author.id.0 == 224233166024474635 {
+    if msg.author.id.0.get() == 224233166024474635 {
         let _ = msg.react(ctx, '👑').await;
     }
     let _ = tokio::join!(msg.react(ctx, '👍'), msg.channel_id.say(ctx, "Pong!"),);
@@ -35,16 +37,18 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 #[description("Check my IQ! (output is in semver format)")]
 async fn version(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| a.name("Wallace Minion"))
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new("Wallace Minion"))
                     .title(WALLACE_VERSION.clone())
                     .colour((58, 8, 9))
                     .image("https://cdn.7tv.app/emote/63ce475278d87d417ed3c8e1/4x.png")
                     .thumbnail("https://cdn.7tv.app/emote/631b61a98cf0978e2955b04f/2x.gif")
-                    .field("Code:", "https://github.com/jonaro00/wallace-minion", true)
-            })
-        })
+                    .field("Code:", "https://github.com/jonaro00/wallace-minion", true),
+            ),
+        )
         .await?;
     Ok(())
 }
@@ -94,13 +98,13 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let ai = get_openai(ctx).await;
     let mut l1 = ai.lock().await;
     let client = l1.0.clone();
-    let m = l1.1.entry(msg.channel_id.0).or_default().clone();
+    let m = l1.1.entry(msg.channel_id.0.get()).or_default().clone();
     drop(l1);
     let mut conv = m.lock().await;
     conv.trim_history();
 
     let input = args.rest();
-    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let typing = ctx.http.start_typing(msg.channel_id);
 
     // check moderation policy
     let request = CreateModerationRequestArgs::default()
@@ -140,15 +144,14 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     // let us = response.usage.unwrap();
     // println!("tokens {} + {}", us.prompt_tokens, us.completion_tokens);
 
-    if let Ok(typing) = typing {
-        let _ = typing.stop();
-    }
-    let reply = &response
+    typing.stop();
+    let reply = response
         .choices
         .get(0)
         .ok_or("No choices returned")?
         .message
-        .content;
+        .content
+        .as_str();
     let s: String = format!("`Wallace AI:`\n{reply}")
         .chars()
         .take(2000)
@@ -160,6 +163,9 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .build()
         .unwrap();
     conv.add(user_msg, assistant_msg);
+
+    let _ = play_text_voice(ctx, msg, reply).await;
+
     Ok(())
 }
 
@@ -169,7 +175,7 @@ async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
     // lock the current channel conversation
     let ai = get_openai(ctx).await;
     let mut l1 = ai.lock().await;
-    let m = l1.1.entry(msg.channel_id.0).or_default().clone();
+    let m = l1.1.entry(msg.channel_id.0.get()).or_default().clone();
     drop(l1);
     let mut conv = m.lock().await;
     conv.reset();
@@ -191,7 +197,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     drop(l1);
 
     let input = args.rest();
-    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let typing = ctx.http.start_typing(msg.channel_id);
 
     // check moderation policy
     let request = CreateModerationRequestArgs::default()
@@ -223,9 +229,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     let response = client.images().create(request).await?;
 
-    if let Ok(typing) = typing {
-        let _ = typing.stop();
-    }
+    typing.stop();
     let reply = match &**response.data.get(0).ok_or("No images returned")? {
         ImageData::Url(_) => panic!("url response not used"),
         ImageData::B64Json(b64) => {
@@ -256,8 +260,11 @@ async fn speak(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     msg.channel_id
         .send_files(
             ctx,
-            [(mp3.as_slice(), format!("{}.mp3", msg.id.0).as_str())],
-            |m| m.content(""),
+            [CreateAttachment::bytes(
+                mp3.as_slice(),
+                format!("{}.mp3", msg.id.0).as_str(),
+            )],
+            CreateMessage::new(),
         )
         .await?;
     Ok(())
@@ -266,14 +273,16 @@ async fn speak(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[command]
 async fn riddle(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| a.name("My hammer says:"))
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new("My hammer says:"))
                     .title("What did the chicken say to the egg? (Click to find out!)")
                     .url("https://youtu.be/dQw4w9WgXcQ")
-                    .colour((200, 255, 33))
-            })
-        })
+                    .colour((200, 255, 33)),
+            ),
+        )
         .await?;
     Ok(())
 }

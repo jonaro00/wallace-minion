@@ -1,3 +1,6 @@
+use std::net::SocketAddr;
+
+use async_trait::async_trait;
 use shuttle_secrets::{SecretStore, Secrets};
 use shuttle_serenity::{ShuttleSerenity, SerenityService};
 
@@ -10,7 +13,7 @@ mod prisma;
 mod services;
 
 #[shuttle_runtime::main]
-async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
+async fn serenity(#[Secrets] secret_store: SecretStore) -> Result<MyService, shuttle_runtime::Error> {
     // Get the tokens set in `Secrets[.dev].toml`
     let discord_token = secret_store
         .get("DISCORD_TOKEN")
@@ -51,5 +54,18 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     )
     .await;
 
-    Ok(SerenityService(client))
+    Ok(MyService{discord: client, other: ()})
+}
+
+struct MyService {
+    pub discord: serenity::Client,
+    pub other: (),
+}
+#[async_trait]
+impl shuttle_service::Service for MyService {
+    async fn bind(mut self: Box<Self>, _addr: SocketAddr) -> Result<(), shuttle_service::error::Error> {
+        self.discord.start().await.map_err(shuttle_service::error::CustomError::new)?;
+
+        Ok(())
+    }
 }
