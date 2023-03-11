@@ -54,7 +54,10 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> Result<MyService, shu
     )
     .await;
 
-    Ok(MyService{discord: client, other: ()})
+    Ok(MyService {
+        discord: client,
+        other: (),
+    })
 }
 
 struct MyService {
@@ -63,8 +66,14 @@ struct MyService {
 }
 #[async_trait]
 impl shuttle_service::Service for MyService {
-    async fn bind(mut self: Box<Self>, _addr: SocketAddr) -> Result<(), shuttle_service::error::Error> {
-        self.discord.start().await.map_err(shuttle_service::error::CustomError::new)?;
+    async fn bind(
+        mut self: Box<Self>,
+        _addr: SocketAddr,
+    ) -> Result<(), shuttle_service::error::Error> {
+        self.discord
+            .start()
+            .await
+            .map_err(shuttle_service::error::CustomError::new)?;
 
         Ok(())
     }

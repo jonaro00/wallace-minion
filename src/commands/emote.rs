@@ -10,7 +10,7 @@ use serenity::{
 
 use crate::services::seven_tv::get_emote_name_url;
 
-#[group]
+#[group("Emotes")]
 #[commands(emote)]
 struct Emote;
 

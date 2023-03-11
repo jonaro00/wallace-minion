@@ -9,7 +9,7 @@ use serenity::{
 
 use crate::services::cool_text::{to_cool_text, Font};
 
-#[group]
+#[group("Cool Text")]
 #[commands(cooltext)]
 struct CoolText;
 

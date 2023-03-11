@@ -11,13 +11,15 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     builder::{CreateEmbed, CreateEmbedAuthor, CreateMessage, EditGuild, EditMember},
     client::Context,
-    framework::standard::CommandResult,
+    framework::standard::{Args, CommandResult},
     model::prelude::{Guild, Message, Timestamp, UserId},
 };
 
 use cool_text::{to_cool_text, Font};
 
 use crate::{database::WallaceDBClient, discord::get_db_handler};
+
+use self::polly::PollyLanguage;
 
 pub async fn set_server_name<'a>(
     ctx: &Context,
@@ -203,5 +205,18 @@ pub async fn do_payment(ctx: &Context, msg: &Message, amount: i64) -> CommandRes
             )
             .await;
         Ok(())
+    }
+}
+
+pub fn get_lang_flag(args: &mut Args) -> Option<PollyLanguage> {
+    if args.current().is_none() {
+        return None;
+    };
+    let a = args.current().unwrap().to_owned();
+    if a.starts_with('-') {
+        args.advance();
+        a.strip_prefix('-').unwrap().parse::<PollyLanguage>().ok()
+    } else {
+        None
     }
 }

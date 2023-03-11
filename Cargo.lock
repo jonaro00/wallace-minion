@@ -280,6 +280,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-comprehend"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c34ccff25c40408e11ebaa20f692e95c4834ec50ebef464ef94ab18e286413f1"
+dependencies = [
+ "aws-credential-types",
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-json",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http",
+ "regex",
+ "tokio-stream",
+ "tower",
+]
+
+[[package]]
 name = "aws-sdk-polly"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5840,6 +5865,7 @@ dependencies = [
  "async-openai",
  "async-trait",
  "aws-config",
+ "aws-sdk-comprehend",
  "aws-sdk-polly",
  "base64 0.21.0",
  "chrono",

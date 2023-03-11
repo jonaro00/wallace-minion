@@ -20,7 +20,7 @@ use crate::{
     services::do_payment,
 };
 
-#[group]
+#[group("Bank and Gambling")]
 #[commands(account, shop, slots, roulette, give, mint, set_mature)]
 struct Bank;
 

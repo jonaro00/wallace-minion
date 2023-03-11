@@ -9,6 +9,7 @@ use std::{
 use anyhow::anyhow;
 use async_openai::Client as OpenAIClient;
 use async_trait::async_trait;
+use aws_sdk_comprehend::Client as ComprehendClient;
 use aws_sdk_polly::Client as PollyClient;
 use chrono::Utc;
 use lazy_static::lazy_static;
@@ -34,14 +35,14 @@ use tracing::{error, info, warn};
 
 use crate::{
     commands::{
-        // bank::BANK_GROUP,
-        cooltext::COOLTEXT_GROUP,
-        // emote::EMOTE_GROUP,
-        general::{WallaceAIConv, GENERAL_GROUP},
         // riot::{lol_report, LOL_GROUP, TFT_GROUP},
         // scheduling::SCHEDULING_GROUP,
         // spells::{random_name, SPELLS_GROUP},
-        voice::VOICE_GROUP,
+        ai_voice::{WallaceAIConv, AIVOICE_GROUP},
+        // bank::BANK_GROUP,
+        cooltext::COOLTEXT_GROUP,
+        // emote::EMOTE_GROUP,
+        general::GENERAL_GROUP,
     },
     database::WallaceDBClient,
     prisma::{self, new_client_with_url, PrismaClient},
@@ -96,7 +97,7 @@ pub async fn build_bot(
         // .group(&BANK_GROUP)
         // .group(&SPELLS_GROUP)
         // .group(&EMOTE_GROUP)
-        .group(&VOICE_GROUP)
+        .group(&AIVOICE_GROUP)
         .group(&COOLTEXT_GROUP)
         // .group(&SCHEDULING_GROUP)
         // .group(&LOL_GROUP)
@@ -128,6 +129,7 @@ pub async fn build_bot(
 
     let config = aws_config::load_from_env().await;
     let polly_client = PollyClient::new(&config);
+    let comprehend_client = ComprehendClient::new(&config);
 
     // Insert shared data
     {
@@ -147,6 +149,7 @@ pub async fn build_bot(
         let (tx, rx) = tokio::sync::mpsc::channel::<()>(1);
         data.insert::<TaskSignal>(Arc::new(tx));
         data.insert::<TaskSignalRx>(rx);
+        data.insert::<WallaceComprehend>(Arc::new(comprehend_client));
     } // Release lock
 
     client
@@ -216,6 +219,18 @@ pub async fn get_polly(ctx: &Context) -> Arc<PollyClient> {
         .await
         .get::<WallacePolly>()
         .expect("Expected AWS Polly Client in TypeMap.")
+        .clone()
+}
+struct WallaceComprehend;
+impl TypeMapKey for WallaceComprehend {
+    type Value = Arc<ComprehendClient>;
+}
+pub async fn get_comprehend(ctx: &Context) -> Arc<ComprehendClient> {
+    ctx.data
+        .read()
+        .await
+        .get::<WallaceComprehend>()
+        .expect("Expected AWS Comprehend Client in TypeMap.")
         .clone()
 }
 
