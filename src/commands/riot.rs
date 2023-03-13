@@ -45,7 +45,7 @@ async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let user = args.current().unwrap().to_owned();
-    let target_uid = parse_username(&user).ok_or("Invalid user tag")?;
+    let target_uid = parse_username(&user).ok_or("Invalid user tag")?.get();
     args.advance();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
         let (server, summoner) = match parse_server_summoner(&arg) {
@@ -82,7 +82,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let user = args.current().unwrap().to_owned();
-    let target_uid = parse_username(user).ok_or("Invalid user tag")?;
+    let target_uid = parse_username(user).ok_or("Invalid user tag")?.get();
     for acc in db.get_all_lol_accounts_in_user(target_uid).await? {
         let _ = msg
             .channel_id
@@ -168,7 +168,7 @@ async fn push_playtime_str(
 #[example("\"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
 async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
-    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let typing = ctx.http.start_typing(msg.channel_id);
     let mut s = String::from("**Weekly playtime:**\n");
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
         let (server, name) = match parse_server_summoner(&arg)
@@ -182,9 +182,7 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         };
         s = push_playtime_str(s, &client, server, &name).await;
     }
-    if let Ok(typing) = typing {
-        let _ = typing.stop();
-    }
+    typing.stop();
     msg.channel_id.say(ctx, s).await?;
     Ok(())
 }
@@ -194,9 +192,9 @@ pub async fn lol_report(ctx: &Context, gc: GuildChannel) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let mut s = String::from("**Weekly playtime:**\n");
     let mut mem = gc.guild_id.members_iter(ctx).boxed();
-    let typing = ctx.http.start_typing(gc.id.0);
+    let typing = ctx.http.start_typing(gc.id);
     while let Some(Ok(m)) = mem.next().await {
-        if let Ok(v) = db.get_all_lol_accounts_in_user(m.user.id.0).await {
+        if let Ok(v) = db.get_all_lol_accounts_in_user(m.user.id.get()).await {
             if v.is_empty() {
                 continue;
             }
@@ -213,9 +211,7 @@ pub async fn lol_report(ctx: &Context, gc: GuildChannel) -> CommandResult {
             }
         }
     }
-    if let Ok(typing) = typing {
-        let _ = typing.stop();
-    }
+    typing.stop();
     gc.id.say(ctx, s).await?;
     Ok(())
 }
@@ -241,7 +237,7 @@ async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let arg = args.current().unwrap().to_owned();
     let (server, name) = parse_server_summoner(&arg)
         .and_then(|(ser, nam)| Ok((PlatformRoute::from_str(&ser)?, nam)))?;
-    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let typing = ctx.http.start_typing(msg.channel_id);
     let puuid_tft = &client
         .get_summoner_tft(server, &name)
         .await
@@ -249,9 +245,7 @@ async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))?
         .puuid;
     let ss = client.tft_analysis(server.to_regional(), puuid_tft).await?;
-    if let Ok(typing) = typing {
-        let _ = typing.stop();
-    }
+    typing.stop();
     for s in ss {
         msg.channel_id.say(ctx, s).await?;
     }

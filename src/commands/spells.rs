@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
+    builder::{CreateEmbed, CreateEmbedAuthor, CreateMessage},
     client::Context,
     framework::standard::{
         macros::{command, group},
@@ -51,7 +52,7 @@ pub static SHOPPABLE_SPELLS_AND_PRICES: &[(&Command, SpellPrice)] = &[
 #[description("Bonk a user.")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     for arg in args.iter::<String>().map(|a| a.unwrap()) {
-        let uid = parse_username(&arg).ok_or("Invalid user tag")?;
+        let uid = parse_username(&arg).ok_or("Invalid user tag")?.get();
         bonk_user(ctx, msg, uid, 60).await?;
     }
     Ok(())
@@ -97,8 +98,8 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     };
 
     let a = args.current().ok_or("Not enough arguments")?;
-    let target_uid = parse_username(a).ok_or("Invalid user tag")?;
-    let uid = msg.author.id.0;
+    let target_uid = parse_username(a).ok_or("Invalid user tag")?.get();
+    let uid = msg.author.id.get();
 
     if do_payment(ctx, msg, amount).await.is_err() {
         return Ok(());
@@ -108,16 +109,17 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let chance = ((modifier * 35.0 * (amount as f32).powf(1.0 / 3.0) - 11.0) as u32).clamp(1, 100);
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| {
-                    a.name(format!(
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new().author(
+                    CreateEmbedAuthor::new(format!(
                         "Size {size} bonk with a bet of {amount} -> {chance}% chance!"
                     ))
-                    .icon_url("https://cdn.7tv.app/emote/6290c771e40c1f3cb6475a01/1x.gif")
-                })
-            })
-        })
+                    .icon_url("https://cdn.7tv.app/emote/6290c771e40c1f3cb6475a01/1x.gif"),
+                ),
+            ),
+        )
         .await;
     tokio::time::sleep(Duration::from_secs(1)).await;
     let mut rng: StdRng = SeedableRng::from_entropy();
@@ -151,7 +153,7 @@ pub const UNBONK_COST: i64 = 2;
 #[usage("<user>")]
 #[example("@Yxaria")]
 async fn unbonk(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
+    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?.get();
     if do_payment(ctx, msg, UNBONK_COST).await.is_err() {
         return Ok(());
     }
@@ -167,7 +169,7 @@ pub const NICKNAME_COST: i64 = 1;
 #[usage("<user> <name>")]
 #[example("@Yxaria Nick 🐒 Name")]
 async fn nickname(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
+    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?.get();
     args.advance();
     let nick = args.rest();
     if nick.chars().count() > 32 {
@@ -186,11 +188,13 @@ async fn nickname(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 #[description("Set the server name to the default.")]
 async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
+    let guild = msg.guild(&ctx.cache).unwrap().to_owned();
+    let guild_id = guild.id;
     set_server_name(
         ctx,
-        msg.guild(ctx).unwrap(),
+        guild,
         Some(msg),
-        &db.get_guild_default_name(msg.guild_id.unwrap().0).await?,
+        &db.get_guild_default_name(guild_id.get()).await?,
     )
     .await
 }
@@ -203,7 +207,7 @@ async fn defaultname(ctx: &Context, msg: &Message) -> CommandResult {
 async fn set(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     db.set_guild_default_name(
-        msg.guild_id.unwrap().0,
+        msg.guild_id.unwrap().get(),
         args.quoted().current().unwrap().to_owned(),
     )
     .await?;
@@ -223,7 +227,8 @@ async fn servername(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if do_payment(ctx, msg, SERVERNAME_COST).await.is_err() {
         return Ok(());
     }
-    set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), name).await
+    let guild = msg.guild(&ctx.cache).unwrap().to_owned();
+    set_server_name(ctx, guild, Some(msg), name).await
 }
 
 #[command]
@@ -233,8 +238,9 @@ async fn servername(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[description("Set the server name to a random one.")]
 async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let (s, o) = db.get_guild_random_names(msg.guild_id.unwrap().0).await?;
-    set_server_name(ctx, msg.guild(ctx).unwrap(), Some(msg), &random_name(s, o)).await
+    let (s, o) = db.get_guild_random_names(msg.guild_id.unwrap().get()).await?;
+    let guild = msg.guild(&ctx.cache).unwrap().to_owned();
+    set_server_name(ctx, guild, Some(msg), &random_name(s, o)).await
 }
 
 #[command]
@@ -246,7 +252,7 @@ async fn list(ctx: &Context, msg: &Message) -> CommandResult {
         .channel_id
         .say(
             ctx,
-            db.get_guild_random_names(msg.guild_id.unwrap().0)
+            db.get_guild_random_names(msg.guild_id.unwrap().get())
                 .await
                 .map(|(s, o)| format!("Subjects: `{}`\nObjects: `{}`", s.join(", "), o.join(", ")))
                 .unwrap_or_else(|e| e.to_string()),
@@ -261,11 +267,8 @@ async fn list(ctx: &Context, msg: &Message) -> CommandResult {
 #[required_permissions("ADMINISTRATOR")]
 async fn add_subject(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    db.add_guild_random_name_subject(
-        msg.guild_id.unwrap().0,
-        args.rest().to_owned(),
-    )
-    .await?;
+    db.add_guild_random_name_subject(msg.guild_id.unwrap().get(), args.rest().to_owned())
+        .await?;
     let _ = msg.channel_id.say(ctx, "Added").await;
     Ok(())
 }
@@ -276,11 +279,8 @@ async fn add_subject(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
 #[required_permissions("ADMINISTRATOR")]
 async fn add_object(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    db.add_guild_random_name_object(
-        msg.guild_id.unwrap().0,
-        args.rest().to_owned(),
-    )
-    .await?;
+    db.add_guild_random_name_object(msg.guild_id.unwrap().get(), args.rest().to_owned())
+        .await?;
     let _ = msg.channel_id.say(ctx, "Added").await;
     Ok(())
 }

@@ -1,5 +1,5 @@
 use serenity::{
-    builder::CreateEmbed,
+    builder::{CreateEmbed, CreateMessage},
     client::Context,
     framework::standard::{
         macros::{command, group},
@@ -26,30 +26,28 @@ struct Emote;
 #[example("SNIFFA xdding - Haha these are funny :D")]
 #[example("60edf43ba60faa2a91cfb082")]
 async fn emote(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let typing = ctx.http.start_typing(msg.channel_id.0);
+    let typing = ctx.http.start_typing(msg.channel_id);
     let mut embeds = vec![];
     while let Some(q) = args.current() {
         if q == "-" {
             break;
         }
-        let mut e = CreateEmbed::default();
-        match get_emote_name_url(q).await {
+        let e = CreateEmbed::new();
+        let e = match get_emote_name_url(q).await {
             Ok((name, url)) => {
-                e.description(&name).image(&url);
+                e.description(&name).image(&url)
             }
             Err(err) => {
-                e.description(format!("{q}: {err}"));
+                e.description(format!("{q}: {err}"))
             }
-        }
+        };
         embeds.push(e);
         args.advance();
     }
-    if let Ok(typing) = typing {
-        let _ = typing.stop();
-    }
+    typing.stop();
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| m.add_embeds(embeds))
+        .send_message(ctx, CreateMessage::new().add_embeds(embeds))
         .await;
     Ok(())
 }

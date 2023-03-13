@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use serenity::{
+    builder::{CreateEmbed, CreateEmbedAuthor, CreateMessage, EditMessage},
     client::Context,
     framework::standard::{
         macros::{command, group},
@@ -21,7 +22,7 @@ use crate::{
 };
 
 #[group("Bank and Gambling")]
-#[commands(account, shop, slots, roulette, give, mint, set_mature)]
+#[commands(account, shop, slots, roulette, give, mint, setmature)]
 struct Bank;
 
 #[command]
@@ -29,11 +30,11 @@ struct Bank;
 #[description("Show your account balance.")]
 async fn account(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let uid = msg.author.id.0;
+    let uid = msg.author.id.get();
     let bal = match db.get_bank_account_balance(uid).await {
         Ok(b) => b,
         Err(e) => {
-            let _ = msg.channel_id.say(ctx, e).await;
+            let _ = msg.channel_id.say(ctx, e.to_string()).await;
             return Ok(());
         }
     };
@@ -44,13 +45,15 @@ async fn account(ctx: &Context, msg: &Message) -> CommandResult {
         .unwrap_or_else(|| "https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif".into());
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| a.name(format!("Balance for {uname}:")).icon_url(upic))
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new(format!("Balance for {uname}:")).icon_url(upic))
                     .title(format!("\\>> {bal} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 <<"))
-                    .thumbnail("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif")
-            })
-        })
+                    .thumbnail("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif"),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -59,9 +62,9 @@ async fn account(ctx: &Context, msg: &Message) -> CommandResult {
 #[description("Open a bank account.")]
 async fn open(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let uid = msg.author.id.0;
+    let uid = msg.author.id.get();
     if let Err(e) = db.create_bank_account(uid).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let _ = msg.channel_id.say(ctx, "Account opened").await;
@@ -72,9 +75,9 @@ async fn open(ctx: &Context, msg: &Message) -> CommandResult {
 #[description("Close your account.")]
 async fn close(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let uid = msg.author.id.0;
+    let uid = msg.author.id.get();
     if let Err(e) = db.delete_bank_account(uid).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let _ = msg.channel_id.say(ctx, "Account closed").await;
@@ -89,7 +92,7 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
     let mut mem = msg.guild_id.unwrap().members_iter(ctx).boxed();
     let mut v = vec![];
     while let Some(Ok(m)) = mem.next().await {
-        if let Ok(b) = db.get_bank_account_balance(m.user.id.0).await {
+        if let Ok(b) = db.get_bank_account_balance(m.user.id.0.get()).await {
             v.push((m, b))
         }
     }
@@ -116,15 +119,17 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
         })
         .collect();
     msg.channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| {
-                    a.name("Top 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 holders")
-                        .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif")
-                })
-                .field("", s, true)
-            })
-        })
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(
+                        CreateEmbedAuthor::new("Top 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 holders")
+                            .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif"),
+                    )
+                    .field("", s, true),
+            ),
+        )
         .await?;
     Ok(())
 }
@@ -134,9 +139,11 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
 async fn shop(ctx: &Context, msg: &Message) -> CommandResult {
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.title("\\>> 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 SHOP <<")
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .title("\\>> 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 SHOP <<")
                     .thumbnail("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/2x.gif")
                     .colour((56, 157, 88))
                     .field("Buffs", "", false)
@@ -167,9 +174,9 @@ async fn shop(ctx: &Context, msg: &Message) -> CommandResult {
                             .as_slice()
                             .join("\n"),
                         false,
-                    )
-            })
-        })
+                    ),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -252,7 +259,7 @@ async fn roulette(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
             return Ok(());
         }
     };
-    let uid = msg.author.id.0;
+    let uid = msg.author.id.get();
     let db = get_db_handler(ctx).await;
     if !db.get_user_mature(uid).await? {
         let _ = msg
@@ -274,13 +281,19 @@ async fn roulette(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         sleep(DELAY_BETWEEN_EDITS).await;
         counter = (counter + 1).rem_euclid(ROULETTE_WHEEL_ITEMS);
         let _ = m
-            .edit(ctx, |e| e.content(print_roulette(counter, false)))
+            .edit(
+                ctx,
+                EditMessage::new().content(print_roulette(counter, false)),
+            )
             .await;
     }
 
     sleep(DELAY_BETWEEN_EDITS).await;
     let _ = m
-        .edit(ctx, |e| e.content(print_roulette(counter, true)))
+        .edit(
+            ctx,
+            EditMessage::new().content(print_roulette(counter, true)),
+        )
         .await;
 
     let (amount, result) = if bet == ROULETTE_WHEEL[counter as usize] {
@@ -296,20 +309,22 @@ async fn roulette(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         return Ok(());
     }
     if let Err(e) = db.add_bank_account_balance(uid, amount).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| {
-                    a.name("Win!")
-                        .icon_url("https://cdn.7tv.app/emote/628d8b64ed0a40a5ec5f4810/1x.gif")
-                })
-                .title(format!("{result}! Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"))
-            })
-        })
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(
+                        CreateEmbedAuthor::new("Win!")
+                            .icon_url("https://cdn.7tv.app/emote/628d8b64ed0a40a5ec5f4810/1x.gif"),
+                    )
+                    .title(format!("{result}! Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!")),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -536,7 +551,7 @@ const DELAY_BETWEEN_EDITS: Duration = Duration::from_millis(800);
     User must be marked mature to get access."
 )]
 async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
-    let uid = msg.author.id.0;
+    let uid = msg.author.id.0.get();
     let db = get_db_handler(ctx).await;
     if !db.get_user_mature(uid).await? {
         let _ = msg
@@ -566,13 +581,19 @@ async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
                 *j = (*j - 1).rem_euclid(SLOT_WHEEL_ITEMS);
             }
             let _ = m
-                .edit(ctx, |e| e.content(print_slots(&wheels, counters, i as u8)))
+                .edit(
+                    ctx,
+                    EditMessage::new().content(print_slots(&wheels, counters, i as u8)),
+                )
                 .await;
         }
     }
     sleep(DELAY_BETWEEN_EDITS).await;
     let _ = m
-        .edit(ctx, |e| e.content(print_slots(&wheels, counters, 3)))
+        .edit(
+            ctx,
+            EditMessage::new().content(print_slots(&wheels, counters, 3)),
+        )
         .await;
 
     let (amount, result) = calculate_payout_result(
@@ -584,20 +605,22 @@ async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
     if let Err(e) = db.add_bank_account_balance(uid, amount).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| {
-                    a.name("Win!")
-                        .icon_url("https://cdn.7tv.app/emote/628d8b64ed0a40a5ec5f4810/1x.gif")
-                })
-                .title(format!("🟩 {result}! Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!"))
-            })
-        })
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new()
+                    .author(
+                        CreateEmbedAuthor::new("Win!")
+                            .icon_url("https://cdn.7tv.app/emote/628d8b64ed0a40a5ec5f4810/1x.gif"),
+                    )
+                    .title(format!("🟩 {result}! Gained {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻!")),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -614,13 +637,13 @@ async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let amount: i64 = a.parse().map_err(|_| "Invalid amount")?;
     args.advance();
     let a = args.current().unwrap();
-    let target_uid = parse_username(a).ok_or("Invalid user tag")?;
-    let uid = msg.author.id.0;
+    let target_uid = parse_username(a).ok_or("Invalid user tag")?.get();
+    let uid = msg.author.id.get();
     if let Err(e) = db
         .transfer_bank_account_balance(uid, target_uid, amount)
         .await
     {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let tn = msg
@@ -632,14 +655,15 @@ async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .unwrap_or_else(|_| "?".into());
     let _ = msg
         .channel_id
-        .send_message(ctx, |m| {
-            m.add_embed(|e| {
-                e.author(|a| {
-                    a.name(format!("Gave {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 to {tn}."))
-                        .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif")
-                })
-            })
-        })
+        .send_message(
+            ctx,
+            CreateMessage::new().add_embed(
+                CreateEmbed::new().author(
+                    CreateEmbedAuthor::new(format!("Gave {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻 to {tn}."))
+                        .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif"),
+                ),
+            ),
+        )
         .await;
     Ok(())
 }
@@ -654,9 +678,9 @@ async fn mint(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let a = args.current().unwrap();
     let amount: i64 = a.parse().map_err(|_| "Invalid amount")?;
-    let uid = msg.author.id.0;
+    let uid = msg.author.id.get();
     if let Err(e) = db.add_bank_account_balance(uid, amount).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let _ = msg.react(ctx, '🫡').await;
@@ -668,15 +692,15 @@ async fn mint(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[num_args(2)]
 #[usage("<user> true|false")]
 #[example("@Yxaria true")]
-async fn set_mature(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn setmature(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let a = args.current().unwrap();
-    let target_uid = parse_username(a).ok_or("Invalid user tag")?;
+    let target_uid = parse_username(a).ok_or("Invalid user tag")?.get();
     args.advance();
     let a = args.current().unwrap();
     let mature: bool = a.parse().map_err(|_| "Invalid bool")?;
     if let Err(e) = db.set_user_mature(target_uid, mature).await {
-        let _ = msg.channel_id.say(ctx, e).await;
+        let _ = msg.channel_id.say(ctx, e.to_string()).await;
         return Ok(());
     }
     let _ = msg.react(ctx, '🫡').await;

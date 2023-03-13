@@ -35,14 +35,14 @@ use tracing::{error, info, warn};
 
 use crate::{
     commands::{
-        // riot::{lol_report, LOL_GROUP, TFT_GROUP},
-        // scheduling::SCHEDULING_GROUP,
-        // spells::{random_name, SPELLS_GROUP},
         ai_voice::{WallaceAIConv, AIVOICE_GROUP},
-        // bank::BANK_GROUP,
+        bank::BANK_GROUP,
         cooltext::COOLTEXT_GROUP,
-        // emote::EMOTE_GROUP,
+        emote::EMOTE_GROUP,
         general::GENERAL_GROUP,
+        riot::{lol_report, LOL_GROUP, TFT_GROUP},
+        scheduling::SCHEDULING_GROUP,
+        spells::{random_name, SPELLS_GROUP},
     },
     database::WallaceDBClient,
     prisma::{self, new_client_with_url, PrismaClient},
@@ -94,14 +94,14 @@ pub async fn build_bot(
         .bucket("slots", |b| b.delay(10).limit_for(LimitedFor::Channel))
         .await
         .group(&GENERAL_GROUP)
-        // .group(&BANK_GROUP)
-        // .group(&SPELLS_GROUP)
-        // .group(&EMOTE_GROUP)
         .group(&AIVOICE_GROUP)
+        .group(&BANK_GROUP)
+        .group(&SPELLS_GROUP)
+        .group(&EMOTE_GROUP)
         .group(&COOLTEXT_GROUP)
-        // .group(&SCHEDULING_GROUP)
-        // .group(&LOL_GROUP)
-        // .group(&TFT_GROUP)
+        .group(&SCHEDULING_GROUP)
+        .group(&LOL_GROUP)
+        .group(&TFT_GROUP)
         .help(&HELP_COMMAND);
     framework.configure(|c| {
         c.prefix(PREFIX)

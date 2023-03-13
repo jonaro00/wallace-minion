@@ -56,13 +56,13 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> Result<MyService, shu
 
     Ok(MyService {
         discord: client,
-        other: (),
+        // other: (),
     })
 }
 
 struct MyService {
     pub discord: serenity::Client,
-    pub other: (),
+    // pub other: (),
 }
 #[async_trait]
 impl shuttle_service::Service for MyService {

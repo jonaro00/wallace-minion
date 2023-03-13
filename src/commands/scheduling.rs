@@ -26,7 +26,7 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
     let s = format!(
         "**Tasks in <#{}>:**\nID: (`cron schedule`) command \"argument\"\n---------------------------\n{}",
         msg.channel_id.0,
-        db.get_all_tasks_in_channel(msg.channel_id.0)
+        db.get_all_tasks_in_channel(msg.channel_id.get())
             .await
             .map(|tasks| {
                 tasks
