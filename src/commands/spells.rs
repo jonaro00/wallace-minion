@@ -153,7 +153,9 @@ pub const UNBONK_COST: i64 = 2;
 #[usage("<user>")]
 #[example("@Yxaria")]
 async fn unbonk(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?.get();
+    let uid = parse_username(args.current().unwrap())
+        .ok_or("Invalid user tag")?
+        .get();
     if do_payment(ctx, msg, UNBONK_COST).await.is_err() {
         return Ok(());
     }
@@ -169,7 +171,9 @@ pub const NICKNAME_COST: i64 = 1;
 #[usage("<user> <name>")]
 #[example("@Yxaria Nick 🐒 Name")]
 async fn nickname(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?.get();
+    let uid = parse_username(args.current().unwrap())
+        .ok_or("Invalid user tag")?
+        .get();
     args.advance();
     let nick = args.rest();
     if nick.chars().count() > 32 {
@@ -238,7 +242,9 @@ async fn servername(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[description("Set the server name to a random one.")]
 async fn randomname(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let (s, o) = db.get_guild_random_names(msg.guild_id.unwrap().get()).await?;
+    let (s, o) = db
+        .get_guild_random_names(msg.guild_id.unwrap().get())
+        .await?;
     let guild = msg.guild(&ctx.cache).unwrap().to_owned();
     set_server_name(ctx, guild, Some(msg), &random_name(s, o)).await
 }

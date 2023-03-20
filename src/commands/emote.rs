@@ -34,12 +34,8 @@ async fn emote(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         }
         let e = CreateEmbed::new();
         let e = match get_emote_name_url(q).await {
-            Ok((name, url)) => {
-                e.description(&name).image(&url)
-            }
-            Err(err) => {
-                e.description(format!("{q}: {err}"))
-            }
+            Ok((name, url)) => e.description(&name).image(&url),
+            Err(err) => e.description(format!("{q}: {err}")),
         };
         embeds.push(e);
         args.advance();

@@ -51,11 +51,7 @@ impl Default for WallaceAIConv {
     }
 }
 impl WallaceAIConv {
-    fn add(
-        &mut self,
-        prompt: ChatCompletionRequestMessage,
-        reply: ChatCompletionRequestMessage,
-    ) {
+    fn add(&mut self, prompt: ChatCompletionRequestMessage, reply: ChatCompletionRequestMessage) {
         self.0.push(prompt);
         self.0.push(reply);
     }
@@ -102,7 +98,7 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         return Ok(());
     }
 
-    let mut conv = m.lock().await; // hold lcok until end of command
+    let mut conv = m.lock().await; // hold lock until end of command
     conv.trim_history();
 
     // chat completion request
@@ -212,10 +208,24 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     typing.stop();
     let reply = match &**response.data.get(0).ok_or("No images returned")? {
-        ImageData::Url(u) => u,
-        ImageData::B64Json(u) => u, // change this if it will be used
+        ImageData::Url(_) => panic!("url response not used"),
+        ImageData::B64Json(b64) => {
+            use base64::{engine::general_purpose, Engine as _};
+            general_purpose::STANDARD
+                .decode(b64.as_str())
+                .map_err(|_| "Invalid base64")?
+        }
     };
-    msg.channel_id.say(ctx, reply.to_string()).await?;
+    msg.channel_id
+        .send_files(
+            ctx,
+            [CreateAttachment::bytes(
+                reply.as_slice(),
+                format!("{}.png", msg.id.0).as_str(),
+            )],
+            CreateMessage::new(),
+        )
+        .await?;
     Ok(())
 }
 

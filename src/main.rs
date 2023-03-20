@@ -12,7 +12,9 @@ mod prisma;
 mod services;
 
 #[shuttle_runtime::main]
-async fn serenity(#[Secrets] secret_store: SecretStore) -> Result<MyService, shuttle_runtime::Error> {
+async fn serenity(
+    #[Secrets] secret_store: SecretStore,
+) -> Result<MyService, shuttle_runtime::Error> {
     // Get the tokens set in `Secrets[.dev].toml`
     let discord_token = secret_store
         .get("DISCORD_TOKEN")
@@ -65,10 +67,7 @@ struct MyService {
 }
 #[async_trait]
 impl shuttle_runtime::Service for MyService {
-    async fn bind(
-        mut self,
-        _addr: SocketAddr,
-    ) -> Result<(), shuttle_runtime::Error> {
+    async fn bind(mut self, _addr: SocketAddr) -> Result<(), shuttle_runtime::Error> {
         self.discord
             .start()
             .await

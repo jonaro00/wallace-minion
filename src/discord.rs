@@ -492,7 +492,9 @@ impl ScheduleTask {
                     Some(ref s) => s,
                     None => return Err(anyhow!("")),
                 };
-                let _ = ChannelId(NonZeroU64::new(data.channel_id as u64).expect("not 0")).say(ctx, arg).await;
+                let _ = ChannelId(NonZeroU64::new(data.channel_id as u64).expect("not 0"))
+                    .say(ctx, arg)
+                    .await;
             }
             ScheduleTask::RandomName => {
                 let g = match ctx
