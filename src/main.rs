@@ -1,5 +1,5 @@
 use shuttle_secrets::{SecretStore, Secrets};
-use shuttle_service::ShuttleSerenity;
+use shuttle_serenity::{ShuttleSerenity, SerenityService};
 
 use discord::build_bot;
 
@@ -9,7 +9,7 @@ mod discord;
 mod prisma;
 mod services;
 
-#[shuttle_service::main]
+#[shuttle_runtime::main]
 async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     // Get the tokens set in `Secrets[.dev].toml`
     let discord_token = secret_store
@@ -51,5 +51,5 @@ async fn serenity(#[Secrets] secret_store: SecretStore) -> ShuttleSerenity {
     )
     .await;
 
-    Ok(client)
+    Ok(SerenityService(client))
 }
