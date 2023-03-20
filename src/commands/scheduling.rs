@@ -82,7 +82,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
     let db = get_db_handler(ctx).await;
     let tx = get_task_signal(ctx).await;
-    let res = db.create_task(cron, cmd, arg, msg.channel_id.0).await;
+    let res = db.create_task(cron, cmd, arg, msg.channel_id.get()).await;
     if res.is_ok() && tx.capacity() > 0 {
         tx.send(()).await.expect("channel to be open");
     }

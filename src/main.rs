@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use shuttle_secrets::{SecretStore, Secrets};
-use shuttle_serenity::{ShuttleSerenity, SerenityService};
 
 use discord::build_bot;
 
@@ -65,15 +64,15 @@ struct MyService {
     // pub other: (),
 }
 #[async_trait]
-impl shuttle_service::Service for MyService {
+impl shuttle_runtime::Service for MyService {
     async fn bind(
-        mut self: Box<Self>,
+        mut self,
         _addr: SocketAddr,
-    ) -> Result<(), shuttle_service::error::Error> {
+    ) -> Result<(), shuttle_runtime::Error> {
         self.discord
             .start()
             .await
-            .map_err(shuttle_service::error::CustomError::new)?;
+            .map_err(shuttle_runtime::CustomError::new)?;
 
         Ok(())
     }

@@ -492,7 +492,7 @@ impl ScheduleTask {
                     Some(ref s) => s,
                     None => return Err(anyhow!("")),
                 };
-                let _ = ChannelId(data.channel_id as u64).say(ctx, arg).await;
+                let _ = ChannelId(NonZeroU64::new(data.channel_id as u64).expect("not 0")).say(ctx, arg).await;
             }
             ScheduleTask::RandomName => {
                 let g = match ctx
@@ -501,10 +501,10 @@ impl ScheduleTask {
                     .and_then(|c| c.guild())
                     .and_then(|g| g.guild(ctx))
                 {
-                    Some(g) => g,
+                    Some(g) => g.to_owned(),
                     None => return Err(anyhow!("")),
                 };
-                if let Ok((s, o)) = db.get_guild_random_names(g.id.0).await {
+                if let Ok((s, o)) = db.get_guild_random_names(g.id.get()).await {
                     let _ = set_server_name(ctx, g, None, &random_name(s, o)).await;
                 }
             }
@@ -515,10 +515,10 @@ impl ScheduleTask {
                     .and_then(|c| c.guild())
                     .and_then(|g| g.guild(ctx))
                 {
-                    Some(g) => g,
+                    Some(g) => g.to_owned(),
                     None => return Err(anyhow!("")),
                 };
-                if let Ok(s) = db.get_guild_default_name(g.id.0).await {
+                if let Ok(s) = db.get_guild_default_name(g.id.get()).await {
                     let _ = set_server_name(ctx, g, None, &s).await;
                 }
             }

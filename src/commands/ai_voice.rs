@@ -55,7 +55,7 @@ impl WallaceAIConv {
         &mut self,
         prompt: ChatCompletionRequestMessage,
         reply: ChatCompletionRequestMessage,
-    ) -> () {
+    ) {
         self.0.push(prompt);
         self.0.push(reply);
     }

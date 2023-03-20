@@ -209,10 +209,7 @@ pub async fn do_payment(ctx: &Context, msg: &Message, amount: i64) -> CommandRes
 }
 
 pub fn get_lang_flag(args: &mut Args) -> Option<PollyLanguage> {
-    if args.current().is_none() {
-        return None;
-    };
-    let a = args.current().unwrap().to_owned();
+    let a = args.current()?.to_owned();
     if a.starts_with('-') {
         args.advance();
         a.strip_prefix('-').unwrap().parse::<PollyLanguage>().ok()

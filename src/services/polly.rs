@@ -79,7 +79,7 @@ impl PollyLanguage {
     }
     pub fn to_list_string() -> String {
         Self::iter()
-            .map(|l| format!("{} {:?} - {}\n", l.flag(), l, l.to_string()))
+            .map(|l| format!("{} {:?} - {}\n", l.flag(), l, l))
             .fold(String::new(), |mut a, s| {
                 a.push_str(s.as_str());
                 a
@@ -93,11 +93,11 @@ impl Default for PollyLanguage {
     }
 }
 
-impl Into<VoiceId> for PollyLanguage {
-    fn into(self) -> VoiceId {
+impl From<PollyLanguage> for VoiceId {
+    fn from(val: PollyLanguage) -> Self {
         use PollyLanguage::*;
         use VoiceId::*;
-        match self {
+        match val {
             English => Brian,
             Arabic => Zeina,
             Chinese => Zhiyu,
