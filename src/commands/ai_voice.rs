@@ -198,7 +198,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let request = CreateImageRequestArgs::default()
         .prompt(input)
         .n(1)
-        .response_format(ResponseFormat::Url)
+        .response_format(ResponseFormat::B64Json)
         .size(ImageSize::S512x512)
         .user("async-openai")
         .build()
