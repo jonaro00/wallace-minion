@@ -25,7 +25,8 @@ If there is enough interest, I might make a demo server where you can try it out
 The `!ai` command lets you chat with Wallace Minion, via ChatGPT (currently `gpt-3.5-turbo`).
 If you are in a voice channel, Wallace will join and read out the message for you using AWS Polly.
 
-ChatGPT supports many languages. TTS supports 🇬🇧🇸🇦🇨🇳🇩🇰🇳🇱🇫🇷🇩🇪🇮🇳🇮🇸🇮🇹🇯🇵🇰🇷🇳🇴🇵🇱🇧🇷🇷🇴🇷🇺🇪🇸🇸🇪🇹🇷🏴󠁧󠁢󠁷󠁬󠁳󠁿, and will detect which language is being read, defaulting to English.
+ChatGPT supports many languages.
+TTS supports 21 languages (see `!languages`), and will detect which language is being read (default is English).
 The detected language can be overridden to make some fun accents 😅.
 
 ### ✨ Raw TTS in all supported languages 🌞
