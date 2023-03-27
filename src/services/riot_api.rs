@@ -151,7 +151,7 @@ impl RiotAPIClients {
                 .get_match(region, m_id)
                 .await?
                 .expect("Match not found");
-            if set == None {
+            if set.is_none() {
                 // Pick up the first Some(_) set.
                 set = mtch.info.tft_set_core_name.clone();
             }
@@ -212,7 +212,7 @@ impl RiotAPIClients {
             for i in items {
                 item_ranking.insert(i, &placement);
             }
-            for a in player.augments.iter().cloned().flatten() {
+            for a in player.augments.iter().flatten().cloned() {
                 augment_ranking.insert(a, &placement);
             }
             matches_analyzed += 1;
