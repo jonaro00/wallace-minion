@@ -7,6 +7,7 @@ use riven::{
     models::{summoner_v4, tft_summoner_v1},
     RiotApi, RiotApiError,
 };
+use tracing::trace;
 
 pub struct RiotAPIClients {
     client_lol: RiotApi,
@@ -141,7 +142,7 @@ impl RiotAPIClients {
         let mut unit_ranking = WinrateList::new();
         let mut item_ranking = WinrateList::new();
         let mut augment_ranking = WinrateList::new();
-        let mut set = "<unknown>".to_owned();
+        let mut set = None;
         let mut matches_analyzed = 0;
         for m_id in &matches {
             let mtch = self
@@ -150,10 +151,16 @@ impl RiotAPIClients {
                 .get_match(region, m_id)
                 .await?
                 .expect("Match not found");
-            if set == "<unknown>" {
-                set = mtch.info.tft_set_core_name.to_owned();
+            if set == None {
+                // Pick up the first Some(_) set.
+                set = mtch.info.tft_set_core_name.clone();
+            }
+            if mtch.info.tft_set_core_name.is_none() {
+                trace!("Skipping a TFT match: set was None.\n{:?}", mtch);
+                continue;
             }
             if mtch.info.tft_set_core_name != set {
+                // both are Some(_), but not equal. We have passed a set boundrary.
                 break;
             }
             let player = mtch
@@ -162,7 +169,7 @@ impl RiotAPIClients {
                 .iter()
                 .find(|p| p.puuid == puuid)
                 .expect("Summoner not found");
-            let placement = if mtch.info.tft_game_type == "pairs" {
+            let placement = if mtch.info.tft_game_type == Some("pairs".into()) {
                 match player.placement {
                     1..=2 => 1.0,
                     3..=4 => 1.0 + 7.0 / 3.0,
@@ -196,16 +203,16 @@ impl RiotAPIClients {
             let mut items = HashSet::new();
             for i in player
                 .units
-                .clone()
                 .iter()
                 .flat_map(|u| u.item_names.to_owned())
+                .flatten()
             {
                 items.insert(i);
             }
             for i in items {
                 item_ranking.insert(i, &placement);
             }
-            for a in player.augments.clone() {
+            for a in player.augments.iter().cloned().flatten() {
                 augment_ranking.insert(a, &placement);
             }
             matches_analyzed += 1;
@@ -213,7 +220,7 @@ impl RiotAPIClients {
         let low_dataset_bound = (matches_analyzed as f32 * 0.07) as usize;
         res.push(format!(
             "{} matches from {} analyzed.\nHiding data with less than {} samples.",
-            matches_analyzed, set, low_dataset_bound
+            matches_analyzed, set.unwrap_or("?".into()), low_dataset_bound
         ));
         for (title, ranking) in vec![
             ("Traits (Silver+)", trait_ranking),
