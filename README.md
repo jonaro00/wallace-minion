@@ -31,6 +31,8 @@ ChatGPT supports many languages.
 TTS supports 21 languages (see `!languages`), and will detect which language is being read (default is English).
 The detected language can be overridden to make some fun accents 😅.
 
+https://user-images.githubusercontent.com/54029719/228099216-570ac72e-ee16-48ec-aab3-f35f320cecdd.mp4
+
 ### ✨ Raw TTS in all supported languages 🌞
 
 `!say` reads out any text in Voice. Language is auto detected, and can be modified.
@@ -57,6 +59,8 @@ Give Kapsyler to someone with `!give`.
 ### ✨ Casino 🎰
 
 Totally win some Kapsyler with `!roll` and `!slots`.
+
+https://user-images.githubusercontent.com/54029719/228099426-77179974-ea62-491f-982c-29eaa4202937.mp4
 
 ### ✨ Shop and spells 🏪🧙‍♂️
 
