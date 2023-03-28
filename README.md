@@ -1,5 +1,7 @@
 # Wallace Minion 🔨🙂 - a quite overloaded Discord bot
 
+![wallace](demo/wallace.png)
+
 Wallace Minion is my first Rust project.
 It started as a way to explore the Rust ecosystem and
 to have something fun to play with in my private friend server.
@@ -39,6 +41,8 @@ The detected language can be overridden to make some fun accents 😅.
 
 `!dalle` generates an image from a prompt and uploads the output in Discord.
 
+![dalle](demo/dalle.png)
+
 ### ✨ Bank 🏦
 
 Some Wallace features use Kapsyler as currency.
@@ -48,18 +52,24 @@ and see the biggest earners in the server with `!account top`.
 
 Give Kapsyler to someone with `!give`.
 
+![account_top](demo/account_top.png)
+
 ### ✨ Casino 🎰
 
-Totally win some Kapsyler with `!roulette` and `!slots`.
+Totally win some Kapsyler with `!roll` and `!slots`.
 
 ### ✨ Shop and spells 🏪🧙‍♂️
 
 Check available spells with `!shop`.
 
+![shop](demo/shop.png)
+
 ### ✨ 7TV Emotes 🐸 + 😎 = ?
 
 Use `!e` to search for emotes on [7TV](https://7tv.app/emotes).
 The first result is pasted in chat.
+
+![emote](demo/emote.png)
 
 ### ✨ Cool Text 🈷
 
@@ -73,3 +83,5 @@ Trigger one or multiple times with a cron pattern.
 ### ✨ LoL and TFT 🖥
 
 Get League of Legends and Teamfight Tactics playtime and analytics with `!lol` and `!tft`.
+
+![lol](demo/lol.png)
