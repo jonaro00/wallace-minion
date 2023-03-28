@@ -6,7 +6,7 @@ Wallace Minion is my first Rust project.
 It started as a way to explore the Rust ecosystem and
 to have something fun to play with in my private friend server.
 
-It is still not adjusted to work in any server, and since is uses
+It is still not adjusted to work in all servers, and since is uses
 some paid APIs, I don't currently plan on making it public.
 If there is enough interest, I might make a demo server where you can try it out.
 
@@ -20,7 +20,7 @@ If there is enough interest, I might make a demo server where you can try it out
 
 ## Features
 
-*Use the `!help` command to see syntax and details about every command.*
+*Use the `!help` command to see syntax and more details about every command.*
 
 ### ✨ AI chat with Text-to-Speech 🤖🔊
 
@@ -33,7 +33,11 @@ The detected language can be overridden to make some fun accents 😅.
 
 https://user-images.githubusercontent.com/54029719/228099216-570ac72e-ee16-48ec-aab3-f35f320cecdd.mp4
 
-### ✨ Raw TTS in all supported languages 🌞
+*In the above video, the `!ai` and `!tts` command use language modifiers to narrate*
+*in a different language than the text.*
+*The `!say` command detects the language form the text.*
+
+### ✨ Plain TTS in all supported languages 🌞
 
 `!say` reads out any text in Voice. Language is auto detected, and can be modified.
 
@@ -61,6 +65,8 @@ Give Kapsyler to someone with `!give`.
 Totally win some Kapsyler with `!roll` and `!slots`.
 
 https://user-images.githubusercontent.com/54029719/228099426-77179974-ea62-491f-982c-29eaa4202937.mp4
+
+*A Roulette bet of 2 on black loses. Then a roll on the slots loses.*
 
 ### ✨ Shop and spells 🏪🧙‍♂️
 
