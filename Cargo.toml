@@ -5,7 +5,6 @@ edition = "2021"
 
 [workspace]
 members = [".", "prisma-cli"]
-resolver = "2"
 
 [dependencies]
 anyhow = "1"
@@ -20,7 +19,7 @@ cron = "0.12"
 dotenvy = "0.15"
 lazy_static = "1"
 rand = "0.8"
-reqwest = "0.11" # https://docs.rs/openssl/latest/openssl/index.html#automatic
+reqwest = "0.11"
 riven = "2.14"
 serde = "1"
 serde_json = "1"
@@ -30,12 +29,6 @@ strum = "0.24"
 symphonia = { version = "0.5.2", features = ["mp3"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
-
-[dependencies.prisma-client-rust]
-git = "https://github.com/Brendonovich/prisma-client-rust"
-tag = "0.6.6"
-default-features = false
-features = ["postgresql"]
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"
@@ -54,3 +47,15 @@ features = [
 git = "https://github.com/serenity-rs/songbird"
 branch = "next"
 features = ["builtin-queue"]
+
+[dependencies.prisma-client-rust]
+git = "https://github.com/Brendonovich/prisma-client-rust"
+tag = "0.6.6"
+default-features = false
+features = ["postgresql"]
+
+[workspace.dependencies.prisma-client-rust-cli]
+git = "https://github.com/Brendonovich/prisma-client-rust"
+tag = "0.6.6"
+default-features = false
+features = ["postgresql"]

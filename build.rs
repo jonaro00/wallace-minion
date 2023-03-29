@@ -1,6 +1,6 @@
 fn main() {
     println!("cargo:rerun-if-changed=prisma/schema.prisma");
-    std::process::Command::new("cargo")
+    if !std::process::Command::new("cargo")
         .args([
             "run",
             "-p",
@@ -10,6 +10,10 @@ fn main() {
             "--",
             "generate",
         ])
-        .spawn()
-        .expect("failed to build prisma");
+        .status()
+        .expect("failed to build prisma")
+        .success()
+    {
+        panic!("failed to generate prisma")
+    }
 }
