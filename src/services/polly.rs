@@ -1,4 +1,4 @@
-use aws_sdk_polly::model::{OutputFormat, TextType, VoiceId};
+use aws_sdk_polly::types::{OutputFormat, TextType, VoiceId};
 use serenity::{client::Context, framework::standard::CommandResult};
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 

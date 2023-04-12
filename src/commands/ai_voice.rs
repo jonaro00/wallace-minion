@@ -19,6 +19,7 @@ use songbird::{
     CoreEvent, Event, EventContext, EventHandler as VoiceEventHandler,
 };
 use symphonia::core::probe::Hint;
+use tracing::info;
 
 use crate::{
     discord::{get_openai, get_songbird},
@@ -235,6 +236,7 @@ pub async fn play_text_voice(
     text: &str,
     lang: Option<PollyLanguage>,
 ) -> CommandResult {
+    info!("Playing text in Voice: {}", text);
     let guild = msg.guild(&ctx.cache).unwrap().to_owned();
     let guild_id = guild.id;
     let channel_id = if let Some(cid) = guild
