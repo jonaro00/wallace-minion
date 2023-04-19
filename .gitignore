@@ -3,3 +3,4 @@ target*
 .env*
 Secrets*.toml
 release.sh
+dep-installer-hack/Cargo.lock

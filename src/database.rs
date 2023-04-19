@@ -276,7 +276,7 @@ impl WallaceDBClient for PrismaClient {
         }
         self.upsert_user(user_id).await?;
         self.bank_account()
-            .create(user_id as i64, vec![])
+            .create(vec![bank_account::user_id::set(user_id as i64)])
             .exec()
             .await
             .map_err(|q| self.log_error(q, "Failed to create bank account"))

@@ -1,10 +1,11 @@
 [package]
 name = "wallace-minion"
-version = "0.10.5"
+version = "0.10.6"
 edition = "2021"
 
 [workspace]
 members = [".", "prisma-cli"]
+exclude = ["dep-installer-hack"]
 
 [dependencies]
 anyhow = "1"
@@ -49,12 +50,12 @@ features = ["builtin-queue"]
 
 [dependencies.prisma-client-rust]
 git = "https://github.com/Brendonovich/prisma-client-rust"
-tag = "0.6.8"
+tag = "0.6.6"
 default-features = false
 features = ["postgresql"]
 
 [workspace.dependencies.prisma-client-rust-cli]
 git = "https://github.com/Brendonovich/prisma-client-rust"
-tag = "0.6.8"
+tag = "0.6.6"
 default-features = false
 features = ["postgresql"]

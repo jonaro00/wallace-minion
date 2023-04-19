@@ -1351,12 +1351,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
-name = "dotenv"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
-
-[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3213,21 +3207,20 @@ dependencies = [
 
 [[package]]
 name = "prisma-client-rust"
-version = "0.6.8"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#259ebbe444beb807529d5f66e120014cad6db5f6"
+version = "0.6.6"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.6#76693baa675bcb38213901984b306d92c4e8a168"
 dependencies = [
  "base64 0.13.1",
  "bigdecimal",
  "chrono",
+ "convert_case 0.6.0",
  "diagnostics",
  "dml",
  "dmmf",
- "dotenv",
  "futures",
  "indexmap",
  "migration-core",
  "paste",
- "prisma-client-rust-macros",
  "prisma-models",
  "psl",
  "query-connector",
@@ -3243,8 +3236,8 @@ dependencies = [
 
 [[package]]
 name = "prisma-client-rust-cli"
-version = "0.6.8"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#259ebbe444beb807529d5f66e120014cad6db5f6"
+version = "0.6.6"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.6#76693baa675bcb38213901984b306d92c4e8a168"
 dependencies = [
  "directories",
  "flate2",
@@ -3262,20 +3255,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "prisma-client-rust-macros"
-version = "0.6.8"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#259ebbe444beb807529d5f66e120014cad6db5f6"
-dependencies = [
- "convert_case 0.6.0",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "prisma-client-rust-sdk"
-version = "0.6.8"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#259ebbe444beb807529d5f66e120014cad6db5f6"
+version = "0.6.6"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.6#76693baa675bcb38213901984b306d92c4e8a168"
 dependencies = [
  "convert_case 0.5.0",
  "dml",
@@ -5783,7 +5765,7 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.10.5"
+version = "0.10.6"
 dependencies = [
  "anyhow",
  "async-openai",
