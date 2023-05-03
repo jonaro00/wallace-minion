@@ -269,9 +269,9 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4232d3729eefc287adc0d5a8adc97b7d94eefffe6bbe94312cc86c7ab6b06ce"
+checksum = "4cb57ac6088805821f78d282c0ba8aec809f11cbee10dda19a97b03ab040ccc2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -283,9 +283,9 @@ dependencies = [
 
 [[package]]
 name = "aws-endpoint"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f04ab03b3f1cca91f7cccaa213056d732accb14e2e65debfacc1d28627d162"
+checksum = "9c5f6f84a4f46f95a9bb71d9300b73cd67eb868bc43ae84f66ad34752299f4ac"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -297,9 +297,9 @@ dependencies = [
 
 [[package]]
 name = "aws-http"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ad8c53f7560baaf635b6aa811f3213d39b50555d100f83e43801652d4e318e"
+checksum = "a754683c322f7dc5167484266489fdebdcd04d26e53c162cad1f3f949f2c5671"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
@@ -316,9 +316,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-comprehend"
-version = "0.26.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44a7a79765b9c9cfa5a9bdd2b5bbec5152a8f491b737d7628d0a0db0abcf6fe3"
+checksum = "18956e0a0f67964673fffbe59c8d8c93682d1eefa9db5d82ef06618ab448aac4"
 dependencies = [
  "aws-credential-types",
  "aws-endpoint",
@@ -342,9 +342,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-polly"
-version = "0.26.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "928496296aafb469696743e609d6b2fa3bae632c8c50957661caed960c4bd9c9"
+checksum = "b630692a2760221d8702eb6a9dcdcb564876b87d6b6221674c82c2f2a6d539dc"
 dependencies = [
  "aws-credential-types",
  "aws-endpoint",
@@ -419,9 +419,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sig-auth"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d77d879ab210e958ba65a6d3842969a596738c024989cd3e490cf9f9b560ec"
+checksum = "84dc92a63ede3c2cbe43529cb87ffa58763520c96c6a46ca1ced80417afba845"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -433,9 +433,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ab4eebc8ec484fb9eab04b15a5d1e71f3dc13bee8fdd2d9ed78bcd6ecbd7192"
+checksum = "392fefab9d6fcbd76d518eb3b1c040b84728ab50f58df0c3c53ada4bea9d327e"
 dependencies = [
  "aws-smithy-http",
  "form_urlencoded",
@@ -452,9 +452,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88573bcfbe1dcfd54d4912846df028b42d6255cbf9ce07be216b1bbfd11fc4b9"
+checksum = "ae23b9fe7a07d0919000116c4c5c0578303fbce6fc8d32efca1f7759d4c20faf"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -464,9 +464,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-client"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2f52352bae50d3337d5d6151b695d31a8c10ebea113eca5bead531f8301b067"
+checksum = "5230d25d244a51339273b8870f0f77874cd4449fb4f8f629b21188ae10cfc0ba"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -488,9 +488,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03bcc02d7ed9649d855c8ce4a735e9848d7b8f7568aad0504c158e3baa955df8"
+checksum = "b60e2133beb9fe6ffe0b70deca57aaeff0a35ad24a9c6fab2fd3b4f45b99fdb5"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -510,9 +510,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-tower"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da88b3a860f65505996c29192d800f1aeb9480440f56d63aad33a3c12045017a"
+checksum = "3a4d94f556c86a0dd916a5d7c39747157ea8cb909ca469703e20fee33e448b67"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -526,9 +526,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b0c1e87d75cac889dca2a7f5ba280da2cde8122448e7fec1d614194dfa00c70"
+checksum = "5ce3d6e6ebb00b2cce379f079ad5ec508f9bcc3a9510d9b9c1840ed1d6f8af39"
 dependencies = [
  "aws-smithy-types",
 ]
@@ -545,9 +545,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd0afc731fd1417d791f9145a1e0c30e23ae0beaab9b4814017708ead2fc20f1"
+checksum = "58db46fc1f4f26be01ebdb821751b4e2482cd43aa2b64a0348fb89762defaffa"
 dependencies = [
  "base64-simd",
  "itoa",
@@ -567,9 +567,9 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "0.55.1"
+version = "0.55.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9b082e329d9a304d39e193ad5c7ab363a0d6507aca6965e0673a746686fb0cc"
+checksum = "de0869598bfe46ec44ffe17e063ed33336e59df90356ca8ff0e8da6f7c1d994b"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
@@ -1349,6 +1349,12 @@ name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
+
+[[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "either"
@@ -3207,20 +3213,21 @@ dependencies = [
 
 [[package]]
 name = "prisma-client-rust"
-version = "0.6.6"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.6#76693baa675bcb38213901984b306d92c4e8a168"
+version = "0.6.8"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#51f0473b642b16bb78fe0f5f3235aeb56f89300d"
 dependencies = [
  "base64 0.13.1",
  "bigdecimal",
  "chrono",
- "convert_case 0.6.0",
  "diagnostics",
  "dml",
  "dmmf",
+ "dotenv",
  "futures",
  "indexmap",
  "migration-core",
  "paste",
+ "prisma-client-rust-macros",
  "prisma-models",
  "psl",
  "query-connector",
@@ -3236,8 +3243,8 @@ dependencies = [
 
 [[package]]
 name = "prisma-client-rust-cli"
-version = "0.6.6"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.6#76693baa675bcb38213901984b306d92c4e8a168"
+version = "0.6.8"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#51f0473b642b16bb78fe0f5f3235aeb56f89300d"
 dependencies = [
  "directories",
  "flate2",
@@ -3255,9 +3262,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "prisma-client-rust-macros"
+version = "0.6.8"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#51f0473b642b16bb78fe0f5f3235aeb56f89300d"
+dependencies = [
+ "convert_case 0.6.0",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "prisma-client-rust-sdk"
-version = "0.6.6"
-source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.6#76693baa675bcb38213901984b306d92c4e8a168"
+version = "0.6.8"
+source = "git+https://github.com/Brendonovich/prisma-client-rust?tag=0.6.8#51f0473b642b16bb78fe0f5f3235aeb56f89300d"
 dependencies = [
  "convert_case 0.5.0",
  "dml",
@@ -4371,9 +4389,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-codegen"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e70e6a07f60954c5a00358b41d6fb59d30b7fd115242f9f01eac36df31c7c6c1"
+checksum = "40dfdf603ff9f81a595e15f8250af8638175213de77e1be6cf145daff5c58103"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -4383,9 +4401,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-common"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8072d108dd5ea72e7848c506e93e186faab3c9b39082a5502cd635b380b34b51"
+checksum = "5069c36fbc9cbf86b0a620080d6ca4e8d57b3cbae107e93aae43162c4e310792"
 dependencies = [
  "async-trait",
  "axum",
@@ -4420,9 +4438,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-proto"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63319b5ccfc94b3d773bb3efdf481fca9b276f8a11461bfa60fc137b435b656c"
+checksum = "6a56a380a4160cf999fdc72d4f3c93623f770607bf1ac9e7c7793def7bff0d0f"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4438,9 +4456,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-runtime"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2f7c40f3ed1d5ee8d59c8b00d104d10c1e14040d8a8d4e0161d1df5612963ee"
+checksum = "f64cea553c3afd09409d495a416d8fae2d6799c12545c16b80289869b9f825b3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4464,9 +4482,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-secrets"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b739c031b7b6d4c49e66c74e95f18f571f19d7f3bb03bdf5e6caf368f4f34f48"
+checksum = "761a06d0917da3cb6eecea0c1f8330a93641062e7c0c9c078dc0b1503edf4091"
 dependencies = [
  "async-trait",
  "serde",
@@ -4475,9 +4493,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-service"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4e6c77ba474f7ff5651d552a2a34e217229b664ba49a4bfae979881ad0a9d24"
+checksum = "759851cd18ef74c1243dc3c1e9acac833b197275566eca78d6d773774614a053"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5765,7 +5783,7 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.10.6"
+version = "0.10.7"
 dependencies = [
  "anyhow",
  "async-openai",
