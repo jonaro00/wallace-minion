@@ -130,19 +130,20 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .message
         .content
         .as_str();
-    let s: String = format!("`Wallace AI:`\n{reply}")
-        .chars()
-        .take(2000)
-        .collect();
-    msg.channel_id.say(ctx, s).await?;
+    let reply = format!("`Wallace AI:`\n{reply}");
+    let mut chars = reply.chars().peekable();
+    while chars.peek().is_some() {
+        let s: String = chars.by_ref().take(2000).collect();
+        msg.channel_id.say(ctx, s).await?;
+    }
     let assistant_msg = ChatCompletionRequestMessageArgs::default()
         .role(Role::Assistant)
-        .content(reply)
+        .content(&reply)
         .build()
         .unwrap();
     conv.add(user_msg, assistant_msg);
 
-    let _ = play_text_voice(ctx, msg, reply, lang).await;
+    let _ = play_text_voice(ctx, msg, &reply, lang).await;
 
     Ok(())
 }
