@@ -143,7 +143,7 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .unwrap();
     conv.add(user_msg, assistant_msg);
 
-    let _ = play_text_voice(ctx, msg, &reply2, lang).await;
+    let _ = play_text_voice(ctx, msg, reply, lang).await;
 
     Ok(())
 }
