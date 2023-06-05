@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.10.11"
+version = "0.10.12"
 edition = "2021"
 
 [workspace]
@@ -23,8 +23,8 @@ reqwest = "0.11"
 riven = "2.19"
 serde = "1"
 serde_json = "1"
-shuttle-runtime = "0.17.0"
-shuttle-secrets = "0.17.0"
+shuttle-runtime = "0.18.0"
+shuttle-secrets = "0.18.0"
 strum = "0.24"
 symphonia = { version = "0.5.3", default-features = false, features = ["mp3"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
