@@ -220,7 +220,9 @@ impl RiotAPIClients {
         let low_dataset_bound = (matches_analyzed as f32 * 0.07) as usize;
         res.push(format!(
             "{} matches from {} analyzed.\nHiding data with less than {} samples.",
-            matches_analyzed, set.unwrap_or("?".into()), low_dataset_bound
+            matches_analyzed,
+            set.unwrap_or("?".into()),
+            low_dataset_bound
         ));
         for (title, ranking) in vec![
             ("Traits (Silver+)", trait_ranking),

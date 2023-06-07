@@ -69,6 +69,7 @@ pub async fn build_bot(
     riot_token_tft: String,
     db_url: String,
     openai_token: String,
+    aws_config: aws_types::SdkConfig,
 ) -> DiscordClient {
     let http = Http::new(&discord_token);
     let (owners, bot_id) = match http.get_current_application_info().await {
@@ -127,9 +128,8 @@ pub async fn build_bot(
         .expect("Database connection failed.");
     info!("Connected to database!");
 
-    let config = aws_config::load_from_env().await;
-    let polly_client = PollyClient::new(&config);
-    let comprehend_client = ComprehendClient::new(&config);
+    let polly_client = PollyClient::new(&aws_config);
+    let comprehend_client = ComprehendClient::new(&aws_config);
 
     // Insert shared data
     {
@@ -251,19 +251,6 @@ impl TypeMapKey for TaskSignalRx {
     type Value = tokio::sync::mpsc::Receiver<()>;
 }
 
-// use serenity::builder::CreateApplicationCommand;
-// use serenity::model::application::command::Command;
-// use serenity::model::application::interaction::{Interaction, InteractionResponseType};
-// use serenity::model::prelude::interaction::application_command::CommandDataOption;
-
-// pub fn run(_options: &[CommandDataOption]) -> String {
-//     "Pong!".to_string()
-// }
-
-// pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-//     command.name("ping").description("A ping command")
-// }
-
 const REACTIONS: &[char] = &['😳', '😏', '😊', '😎'];
 struct Handler;
 #[async_trait]
@@ -279,8 +266,6 @@ impl EventHandler for Handler {
             ActivityData::watching(format!("you 🔨🙂 | !help | {}", *WALLACE_VERSION))
         };
         let _ = ctx.set_activity(Some(activity));
-
-        // let _ = Command::create_global_application_command(ctx, register).await;
     }
 
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
@@ -302,25 +287,6 @@ impl EventHandler for Handler {
                 .await;
         }
     }
-
-    // async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-    //     if let Interaction::ApplicationCommand(command) = interaction {
-    //         let content = run(&command.data.options);
-
-    //         if let Err(why) = command
-    //             .create_interaction_response(&ctx.http, |response| {
-    //                 response
-    //                     .kind(InteractionResponseType::ChannelMessageWithSource)
-    //                     .interaction_response_data(|message| {
-    //                         message.ephemeral(true).content(content)
-    //                     })
-    //             })
-    //             .await
-    //         {
-    //             warn!("Cannot respond to slash command: {}", why);
-    //         }
-    //     }
-    // }
 }
 
 #[hook]

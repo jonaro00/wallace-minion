@@ -42,10 +42,17 @@ async fn serenity(
         .get("AWS_REGION")
         .expect("AWS Region missing! (env variable `AWS_REGION`)");
 
-    // To be consumed by `aws_config::load_from_env()`
-    std::env::set_var("AWS_ACCESS_KEY_ID", aws_key_id);
-    std::env::set_var("AWS_SECRET_ACCESS_KEY", aws_secret);
-    std::env::set_var("AWS_REGION", aws_region);
+    let aws_config = aws_config::from_env()
+        .credentials_provider(aws_credential_types::Credentials::new(
+            aws_key_id,
+            aws_secret,
+            None,
+            None,
+            "what is this string supposed to do?",
+        ))
+        .region(aws_types::region::Region::new(aws_region))
+        .load()
+        .await;
 
     let client = build_bot(
         discord_token,
@@ -53,6 +60,7 @@ async fn serenity(
         riot_token_tft,
         db_url,
         openai_token,
+        aws_config,
     )
     .await;
 

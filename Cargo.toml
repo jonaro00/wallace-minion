@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.10.12"
+version = "0.10.13"
 edition = "2021"
 
 [workspace]
@@ -12,8 +12,10 @@ anyhow = "1"
 async-openai = "0.10"
 async-trait = "0.1"
 aws-config = "0.55"
+aws-credential-types = "0.55"
 aws-sdk-comprehend = "0.28"
 aws-sdk-polly = "0.28"
+aws-types = "0.55"
 base64 = "0.21"
 chrono = { version = "0.4.25", default-features = false }
 cron = "0.12"

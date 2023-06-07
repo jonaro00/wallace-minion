@@ -5500,14 +5500,16 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.10.12"
+version = "0.10.13"
 dependencies = [
  "anyhow",
  "async-openai",
  "async-trait",
  "aws-config",
+ "aws-credential-types",
  "aws-sdk-comprehend",
  "aws-sdk-polly",
+ "aws-types",
  "base64 0.21.2",
  "chrono",
  "cron",
