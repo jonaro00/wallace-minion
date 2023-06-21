@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::anyhow;
-use async_openai::Client as OpenAIClient;
+use async_openai::{config::OpenAIConfig, Client as OpenAIClient};
 use async_trait::async_trait;
 use aws_sdk_comprehend::Client as ComprehendClient;
 use aws_sdk_polly::Client as PollyClient;
@@ -142,7 +142,7 @@ pub async fn build_bot(
         )));
         data.insert::<WallaceDB>(Arc::new(db));
         data.insert::<WallaceOpenAI>(Arc::new(Mutex::new((
-            OpenAIClient::new().with_api_key(openai_token),
+            OpenAIClient::with_config(OpenAIConfig::new().with_api_key(openai_token)),
             Default::default(),
         ))));
         data.insert::<WallacePolly>(Arc::new(polly_client));
@@ -196,11 +196,21 @@ pub async fn get_db_handler(ctx: &Context) -> Arc<PrismaClient> {
 
 struct WallaceOpenAI;
 impl TypeMapKey for WallaceOpenAI {
-    type Value = Arc<Mutex<(OpenAIClient, HashMap<u64, Arc<Mutex<WallaceAIConv>>>)>>;
+    type Value = Arc<
+        Mutex<(
+            OpenAIClient<OpenAIConfig>,
+            HashMap<u64, Arc<Mutex<WallaceAIConv>>>,
+        )>,
+    >;
 }
 pub async fn get_openai(
     ctx: &Context,
-) -> Arc<Mutex<(OpenAIClient, HashMap<u64, Arc<Mutex<WallaceAIConv>>>)>> {
+) -> Arc<
+    Mutex<(
+        OpenAIClient<OpenAIConfig>,
+        HashMap<u64, Arc<Mutex<WallaceAIConv>>>,
+    )>,
+> {
     ctx.data
         .read()
         .await

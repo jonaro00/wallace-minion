@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.10.13"
+version = "0.10.14"
 edition = "2021"
 
 [workspace]
@@ -9,7 +9,7 @@ exclude = ["dep-installer-hack"]
 
 [dependencies]
 anyhow = "1"
-async-openai = "0.10"
+async-openai = "0.11"
 async-trait = "0.1"
 aws-config = "0.55"
 aws-credential-types = "0.55"
@@ -17,17 +17,17 @@ aws-sdk-comprehend = "0.28"
 aws-sdk-polly = "0.28"
 aws-types = "0.55"
 base64 = "0.21"
-chrono = { version = "0.4.25", default-features = false }
+chrono = { version = "0.4.26", default-features = false }
 cron = "0.12"
 lazy_static = "1"
 rand = "0.8"
 reqwest = "0.11"
-riven = "2.19"
+riven = "2.20"
 serde = "1"
 serde_json = "1"
-shuttle-runtime = "0.18.0"
-shuttle-secrets = "0.18.0"
-strum = "0.24"
+shuttle-runtime = "0.19.0"
+shuttle-secrets = "0.19.0"
+strum = { version = "0.25", features = ["derive"] }
 symphonia = { version = "0.5.3", default-features = false, features = ["mp3"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
@@ -47,8 +47,7 @@ features = [
 
 [dependencies.songbird]
 git = "https://github.com/serenity-rs/songbird"
-rev = "f38021fdf5616da0ddcb85dfc88d9c1eb839d6e6"
-# branch = "next"
+branch = "next"
 features = ["builtin-queue"]
 
 [dependencies.prisma-client-rust]
