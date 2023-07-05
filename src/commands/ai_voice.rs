@@ -129,6 +129,8 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .ok_or("No choices returned")?
         .message
         .content
+        .as_ref()
+        .ok_or("No message content")?
         .as_str();
     let reply2 = format!("`Wallace AI:`\n{reply}");
     let mut chars = reply2.chars().peekable();
