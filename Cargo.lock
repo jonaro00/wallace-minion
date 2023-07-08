@@ -5624,7 +5624,7 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.10.15"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-openai",

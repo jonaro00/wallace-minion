@@ -111,7 +111,7 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .unwrap();
     v.push(user_msg.clone());
     let request = CreateChatCompletionRequestArgs::default()
-        .model("gpt-3.5-turbo")
+        .model("gpt-4")
         .messages(v)
         .build()
         .unwrap();
@@ -239,7 +239,6 @@ pub async fn play_text_voice(
     text: &str,
     lang: Option<PollyLanguage>,
 ) -> CommandResult {
-    info!("Playing text in Voice: {}", text);
     let guild = msg.guild(&ctx.cache).unwrap().to_owned();
     let guild_id = guild.id;
     let channel_id = if let Some(cid) = guild
@@ -247,9 +246,11 @@ pub async fn play_text_voice(
         .get(&msg.author.id)
         .and_then(|vs| vs.channel_id)
     {
+        info!("Playing text in Voice: {}", text);
         cid
     } else {
-        return Ok(()); // User not in voice channel
+        info!("Not playing text in Voice: User not in voice channel");
+        return Ok(());
     };
 
     let manager = get_songbird(ctx).await;
