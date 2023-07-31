@@ -3739,9 +3739,9 @@ dependencies = [
 
 [[package]]
 name = "riven"
-version = "2.20.0"
+version = "2.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efc279a6ccc236fb6f83d0c575f189d70780db6f781c1ac311c8c2134fdf8d75"
+checksum = "7d6c5b03629b7ab132918d3a6150080d0e40bf9a622edb61ff61f4ded4c2fe78"
 dependencies = [
  "lazy_static",
  "log",
@@ -4279,9 +4279,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-codegen"
-version = "0.20.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d87d71b59fb4c8e16850d82a35a1db404fe94ba25cb3f3e59a4446dc8693bea8"
+checksum = "5dc8c26160bedab3fdddc684e52cbe41e692402d4e8254a142930b29a9a4ea97"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -4291,9 +4291,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-common"
-version = "0.20.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df1cae7a1f9babad2fbed877c8e64be57449310774f4d56de6f99da3e57862cd"
+checksum = "26a36d3fc4ec9abe5d5b9f8d2698e248caf095fa6ad5bb3d6bcf9227515d4e78"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4329,9 +4329,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-proto"
-version = "0.20.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fb3f01d80d60e363910bab3ee01bf421bb9c30c58f1a5d3180186872a325b98"
+checksum = "a9fae1e2817e1dc96f65c3ef6ca5daa75f8ead036900a02583d74b02da635a27"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4347,9 +4347,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-runtime"
-version = "0.20.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9443234a16b34f1de3ad71a8875381f4d1cad53aca08e607d12811e27c2d73d"
+checksum = "401441fd2d6f3d3285ecba1a67ff8adf5e748762f3e4ee5b7893be4063c51863"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4373,9 +4373,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-secrets"
-version = "0.20.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a5665b0d033aae70d7ad4c2b7537b21ca66506a7aac8c5cf389df720d26b0ad"
+checksum = "587d5c9858ac4ddcaf46c1b13f633d1a27ed25664f909ecd1392caf23f5d405c"
 dependencies = [
  "async-trait",
  "serde",
@@ -4384,9 +4384,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-service"
-version = "0.20.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b84097de44183cfe573eb875c26ecafe1eb78672c214fbc5889462ef37b1bc98"
+checksum = "beca267cd66915c6b24467f4a6cf65cba082dd1170708a3f14cd75c7a8474469"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5624,7 +5624,7 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "anyhow",
  "async-openai",
