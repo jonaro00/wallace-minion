@@ -224,7 +224,7 @@ impl RiotAPIClients {
             set.unwrap_or("?".into()),
             low_dataset_bound
         ));
-        for (title, ranking) in vec![
+        for (title, ranking) in [
             ("Traits (Silver+)", trait_ranking),
             ("Units", unit_ranking),
             ("Items", item_ranking),

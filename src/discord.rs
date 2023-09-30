@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use aws_sdk_comprehend::Client as ComprehendClient;
 use aws_sdk_polly::Client as PollyClient;
 use chrono::Utc;
-use lazy_static::lazy_static;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     client::{Client as DiscordClient, Context, EventHandler},
@@ -49,17 +48,7 @@ use crate::{
     services::{riot_api::RiotAPIClients, set_server_name},
 };
 
-lazy_static! {
-    pub static ref WALLACE_VERSION: String = format!(
-        "v{}{}",
-        env!("CARGO_PKG_VERSION"),
-        if cfg!(debug_assertions) {
-            " (development)"
-        } else {
-            ""
-        },
-    );
-}
+pub static WALLACE_VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 pub const PREFIX: &str = "!";
 
@@ -71,6 +60,18 @@ pub async fn build_bot(
     openai_token: String,
     aws_config: aws_types::SdkConfig,
 ) -> DiscordClient {
+    WALLACE_VERSION.get_or_init(|| {
+        format!(
+            "v{}{}",
+            env!("CARGO_PKG_VERSION"),
+            if cfg!(debug_assertions) {
+                " (development)"
+            } else {
+                ""
+            }
+        )
+    });
+
     let http = Http::new(&discord_token);
     let (owners, bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
@@ -270,10 +271,13 @@ impl EventHandler for Handler {
         let activity = if cfg!(debug_assertions) {
             ActivityData::playing(format!(
                 "on a construction site 🔨🙂 | {}",
-                *WALLACE_VERSION
+                WALLACE_VERSION.get().unwrap()
             ))
         } else {
-            ActivityData::watching(format!("you 🔨🙂 | !help | {}", *WALLACE_VERSION))
+            ActivityData::watching(format!(
+                "you 🔨🙂 | !help | {}",
+                WALLACE_VERSION.get().unwrap()
+            ))
         };
         let _ = ctx.set_activity(Some(activity));
     }

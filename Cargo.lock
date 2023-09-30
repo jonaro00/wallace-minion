@@ -291,9 +291,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-comprehend"
-version = "0.31.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae389f27164456f4f2f9b11b0a261c4b278b4790b99dfc261bbe49ec47acc080"
+checksum = "1e051bece19b86553517354ea9d3b3189142ea370601ccb49535f0b94442b1ea"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -316,9 +316,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-polly"
-version = "0.31.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "968640419c6ce2f115715b94ad86c8e0c03e7ef160125a694a10be83780c1bcd"
+checksum = "4a4157655fb2b0d28bb4b838e0b0b111ea14a19d53d8b406d80b9528eb3c1eae"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -4101,6 +4101,9 @@ name = "semver"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0293b4b29daaf487284529cc2f5675b8e57c61f70167ba415a463651fd6a918"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"
@@ -4290,9 +4293,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-codegen"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20aa59e8ee75ff94b06d13763bb87d083262abe8f896e55ccbd5fd92207b8485"
+checksum = "7c3019c84d317636a7a6ec4422e645d1a7a23467a9f7d7888e1f895de22912f0"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -4302,9 +4305,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-common"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19e5f370ad24f777bd6f45f98d84607822993e4672af6b21b71158c6dc0c4b53"
+checksum = "0a7c62201d9cbb6f1e68ddca84133c09c17e07f626454be6f1b3e81b02f66db0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4327,6 +4330,7 @@ dependencies = [
  "reqwest",
  "rmp-serde",
  "rustrict",
+ "semver",
  "serde",
  "serde_json",
  "strum 0.24.1",
@@ -4344,9 +4348,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-proto"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9239b46e75ee3d0266729e896e3d077939ab3724cc9bba58d060396149ec288"
+checksum = "f0d8eb484348a330f4b599fa0ca93ae3a35b750400dec66a0b051bc8bf708e44"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4364,9 +4368,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-runtime"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3609e885b2c8115ff86d2a892d5f9e6421d8de5588197f7e020e06f55888d335"
+checksum = "ffcb33905113b15b0fa1b8af8abc50aeeaf9b4cf41638ee2a760ed6818f10c2e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4390,9 +4394,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-secrets"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ace096bfe5dc2e8041fb1460db496f54382b331465623e36867447d7e8c0557"
+checksum = "9efd9cbd80d21846add15666a23c91896c2d2ba40a986d4e33149ec4f1b299ad"
 dependencies = [
  "async-trait",
  "serde",
@@ -4401,9 +4405,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-service"
-version = "0.27.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55d8e7379d5fcde2c1f309cd4f9042cfa425a18c9ee514c4aad78540034d2925"
+checksum = "a7574c6e64e89e8f3a44445db51fa28f439a42380bab58ea2b4a3d1fd822a3e7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5640,7 +5644,7 @@ checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
 name = "wallace-minion"
-version = "0.11.7"
+version = "0.11.8"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -5653,7 +5657,6 @@ dependencies = [
  "base64 0.21.4",
  "chrono",
  "cron",
- "lazy_static",
  "prisma-client-rust",
  "rand 0.8.5",
  "reqwest",

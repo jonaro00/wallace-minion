@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.11.7"
+version = "0.11.8"
 edition = "2021"
 
 [workspace]
@@ -13,20 +13,19 @@ async-openai = "0.14"
 async-trait = "0.1"
 aws-config = "0.56"
 aws-credential-types = "0.56"
-aws-sdk-comprehend = "0.31"
-aws-sdk-polly = "0.31"
+aws-sdk-comprehend = "0.33"
+aws-sdk-polly = "0.33"
 aws-types = "0.56"
 base64 = "0.21"
 chrono = { version = "0.4.28", default-features = false }
 cron = "0.12"
-lazy_static = "1"
 rand = "0.8"
 reqwest = "0.11"
 riven = "2.24"
 serde = "1"
 serde_json = "1"
-shuttle-runtime = "0.27.0"
-shuttle-secrets = "0.27.0"
+shuttle-runtime = "0.29.0"
+shuttle-secrets = "0.29.0"
 strum = { version = "0.25", features = ["derive"] }
 symphonia = { version = "0.5.3", default-features = false, features = ["mp3"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
