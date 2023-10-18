@@ -9,7 +9,7 @@ use serenity::{
         Args, Command, CommandResult,
     },
     model::prelude::Message,
-    utils::parse_username,
+    utils::parse_user_mention,
 };
 
 use crate::{
@@ -52,7 +52,7 @@ pub static SHOPPABLE_SPELLS_AND_PRICES: &[(&Command, SpellPrice)] = &[
 #[description("Bonk a user.")]
 async fn bonk(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     for arg in args.iter::<String>().map(|a| a.unwrap()) {
-        let uid = parse_username(&arg).ok_or("Invalid user tag")?.get();
+        let uid = parse_user_mention(&arg).ok_or("Invalid user tag")?.get();
         bonk_user(ctx, msg, uid, 60).await?;
     }
     Ok(())
@@ -98,7 +98,7 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     };
 
     let a = args.current().ok_or("Not enough arguments")?;
-    let target_uid = parse_username(a).ok_or("Invalid user tag")?.get();
+    let target_uid = parse_user_mention(a).ok_or("Invalid user tag")?.get();
     let uid = msg.author.id.get();
 
     if do_payment(ctx, msg, amount).await.is_err() {
@@ -139,7 +139,7 @@ async fn gamba(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 async fn hammer(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let _ = msg.channel_id.say(ctx, "You have no hammer 😠").await;
     return Ok(());
-    // let uid = parse_username(args.current().unwrap()).ok_or("Invalid user tag")?;
+    // let uid = parse_user_mention(args.current().unwrap()).ok_or("Invalid user tag")?;
     // bonk_user(ctx, msg, uid, 60).await?;
     // Ok(())
 }
@@ -153,7 +153,7 @@ pub const UNBONK_COST: i64 = 2;
 #[usage("<user>")]
 #[example("@Yxaria")]
 async fn unbonk(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let uid = parse_username(args.current().unwrap())
+    let uid = parse_user_mention(args.current().unwrap())
         .ok_or("Invalid user tag")?
         .get();
     if do_payment(ctx, msg, UNBONK_COST).await.is_err() {
@@ -171,7 +171,7 @@ pub const NICKNAME_COST: i64 = 1;
 #[usage("<user> <name>")]
 #[example("@Yxaria Nick 🐒 Name")]
 async fn nickname(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let uid = parse_username(args.current().unwrap())
+    let uid = parse_user_mention(args.current().unwrap())
         .ok_or("Invalid user tag")?
         .get();
     args.advance();

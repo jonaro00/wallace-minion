@@ -131,18 +131,18 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn sadge() {
+    async fn prayge() {
         for _ in 0..10 {
-            let (name, url) = match get_emote_name_url("sadge").await {
+            let (name, url) = match get_emote_name_url("pray").await {
                 Ok(v) => v,
                 Err(_) => {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     continue;
                 }
             };
-            assert_eq!(name, "Sadge");
+            assert_eq!(name, "Prayge");
             assert!(url.starts_with("https://"));
-            assert!(url.contains("603cac391cd55c0014d989be"));
+            assert!(url.contains("60aec2196cfcffe15f4e4f93"));
             assert!(url.ends_with(".png"));
             break;
         }

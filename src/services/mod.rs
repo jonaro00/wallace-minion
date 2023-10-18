@@ -3,8 +3,6 @@ pub mod polly;
 pub mod riot_api;
 pub mod seven_tv;
 
-use std::num::NonZeroU64;
-
 use anyhow::anyhow;
 use chrono::Duration;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -60,7 +58,7 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) ->
     if let Err(e) = gid
         .edit_member(
             ctx,
-            UserId(NonZeroU64::new(uid).expect("not 0")),
+            UserId::new(uid),
             EditMember::new().disable_communication_until(
                 Timestamp::now()
                     .checked_add_signed(Duration::seconds(duration as i64))
@@ -113,7 +111,7 @@ pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResul
     if let Err(e) = gid
         .edit_member(
             ctx,
-            UserId(NonZeroU64::new(uid).expect("not 0")),
+            UserId::new(uid),
             EditMember::new().enable_communication(),
         )
         .await
@@ -158,11 +156,7 @@ pub async fn unbonk_user(ctx: &Context, msg: &Message, uid: u64) -> CommandResul
 pub async fn nickname_user(ctx: &Context, msg: &Message, uid: u64, nick: String) -> CommandResult {
     let gid = msg.guild_id.ok_or("Failed to get guild")?;
     if let Err(e) = gid
-        .edit_member(
-            ctx,
-            UserId(NonZeroU64::new(uid).expect("not 0")),
-            EditMember::new().nickname(nick),
-        )
+        .edit_member(ctx, UserId::new(uid), EditMember::new().nickname(nick))
         .await
     {
         let s = e.to_string();
@@ -186,7 +180,7 @@ pub async fn nickname_user(ctx: &Context, msg: &Message, uid: u64, nick: String)
 pub async fn do_payment(ctx: &Context, msg: &Message, amount: i64) -> CommandResult {
     let db = get_db_handler(ctx).await;
     if let Err(e) = db
-        .subtract_bank_account_balance(msg.author.id.0.get(), amount)
+        .subtract_bank_account_balance(msg.author.id.get(), amount)
         .await
     {
         let _ = msg.channel_id.say(ctx, e.to_string()).await;

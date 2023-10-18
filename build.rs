@@ -7,10 +7,7 @@ fn main() {
             "-p",
             "prisma-cli",
             "--target-dir",
-            if !std::env::var("HOSTNAME")
-                .unwrap_or_default()
-                .contains("shuttle")
-            {
+            if std::env::var("SHUTTLE").is_err() {
                 "target_prisma-cli"
             } else {
                 "/opt/shuttle/target_prisma-cli"

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Write, str::FromStr};
 
 use serenity::{
     client::Context,
@@ -25,22 +25,23 @@ async fn tasks(ctx: &Context, msg: &Message) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let s = format!(
         "**Tasks in <#{}>:**\nID: (`cron schedule`) command \"argument\"\n---------------------------\n{}",
-        msg.channel_id.0,
+        msg.channel_id,
         db.get_all_tasks_in_channel(msg.channel_id.get())
             .await
             .map(|tasks| {
                 tasks
                     .iter()
-                    .map(|t| {
-                        format!(
-                            "{}: (`{}`) {} \"{}\"\n",
+                    .fold(String::new(), |mut s, t| {
+                        writeln!(
+                            &mut s,
+                            "{}: (`{}`) {} \"{}\"",
                             t.id,
                             t.cron,
                             t.cmd,
                             t.arg.clone().unwrap_or_default()
-                        )
+                        ).unwrap();
+                        s
                     })
-                    .collect()
             })
             .unwrap_or_else(|e| e.to_string())
     );

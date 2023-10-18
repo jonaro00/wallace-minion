@@ -9,7 +9,7 @@ use serenity::{
     },
     futures::StreamExt,
     model::prelude::{GuildChannel, Message},
-    utils::parse_username,
+    utils::parse_user_mention,
 };
 
 use crate::{
@@ -45,7 +45,7 @@ async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let user = args.current().unwrap().to_owned();
-    let target_uid = parse_username(&user).ok_or("Invalid user tag")?.get();
+    let target_uid = parse_user_mention(&user).ok_or("Invalid user tag")?.get();
     args.advance();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
         let (server, summoner) = match parse_server_summoner(&arg) {
@@ -81,8 +81,8 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[example("@jonaro00")]
 async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
-    let user = args.current().unwrap().to_owned();
-    let target_uid = parse_username(user).ok_or("Invalid user tag")?.get();
+    let user = args.current().unwrap();
+    let target_uid = parse_user_mention(user).ok_or("Invalid user tag")?.get();
     for acc in db.get_all_lol_accounts_in_user(target_uid).await? {
         let _ = msg
             .channel_id

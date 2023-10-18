@@ -17,7 +17,7 @@ struct General;
 #[command]
 #[description("Challenge me to a game of table tennis! (and check if I'm alive)")]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    if msg.author.id.0.get() == 224233166024474635 {
+    if msg.author.id.get() == 224233166024474635 {
         let _ = msg.react(ctx, '👑').await;
     }
     let _ = tokio::join!(msg.react(ctx, '👍'), msg.channel_id.say(ctx, "Pong!"),);

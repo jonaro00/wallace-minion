@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
-    num::NonZeroU64,
     str::FromStr,
     sync::Arc,
 };
@@ -472,9 +471,7 @@ impl ScheduleTask {
                     Some(ref s) => s,
                     None => return Err(anyhow!("")),
                 };
-                let _ = ChannelId(NonZeroU64::new(data.channel_id as u64).expect("not 0"))
-                    .say(ctx, arg)
-                    .await;
+                let _ = ChannelId::new(data.channel_id as u64).say(ctx, arg).await;
             }
             ScheduleTask::RandomName => {
                 let g = match ctx

@@ -78,7 +78,7 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let ai = get_openai(ctx).await;
     let mut l1 = ai.lock().await;
     let client = l1.0.clone();
-    let m = l1.1.entry(msg.channel_id.0.get()).or_default().clone();
+    let m = l1.1.entry(msg.channel_id.get()).or_default().clone();
     drop(l1);
 
     // check moderation policy
@@ -156,7 +156,7 @@ async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
     // lock the current channel conversation
     let ai = get_openai(ctx).await;
     let mut l1 = ai.lock().await;
-    let m = l1.1.entry(msg.channel_id.0.get()).or_default().clone();
+    let m = l1.1.entry(msg.channel_id.get()).or_default().clone();
     drop(l1);
     let mut conv = m.lock().await;
     conv.reset();
@@ -225,7 +225,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             ctx,
             [CreateAttachment::bytes(
                 reply.as_slice(),
-                format!("{}.png", msg.id.0).as_str(),
+                format!("{}.png", msg.id).as_str(),
             )],
             CreateMessage::new(),
         )
@@ -334,7 +334,7 @@ async fn tts(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             ctx,
             [CreateAttachment::bytes(
                 mp3.as_slice(),
-                format!("{}.mp3", msg.id.0).as_str(),
+                format!("{}.mp3", msg.id).as_str(),
             )],
             CreateMessage::new(),
         )

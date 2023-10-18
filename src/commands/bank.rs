@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt::Write, time::Duration};
 
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use serenity::{
@@ -10,7 +10,7 @@ use serenity::{
     },
     futures::StreamExt,
     model::prelude::Message,
-    utils::parse_username,
+    utils::parse_user_mention,
 };
 use tokio::time::sleep;
 
@@ -92,26 +92,27 @@ async fn top(ctx: &Context, msg: &Message) -> CommandResult {
     let mut mem = msg.guild_id.unwrap().members_iter(ctx).boxed();
     let mut v = vec![];
     while let Some(Ok(m)) = mem.next().await {
-        if let Ok(b) = db.get_bank_account_balance(m.user.id.0.get()).await {
+        if let Ok(b) = db.get_bank_account_balance(m.user.id.get()).await {
             v.push((m, b))
         }
     }
     v.sort_by_key(|t| t.1);
-    let s: String = v
-        .into_iter()
-        .rev()
-        .take(10)
-        .enumerate()
-        .map(|(i, (m, b))| {
-            format!(
-                "`{:>2}. {:<20} {:>4}`{}\n",
-                i + 1,
-                m.nick.unwrap_or(m.user.name),
-                b,
-                "<:Kapsyl:1079763140272734218>",
-            )
-        })
-        .collect();
+    let s: String =
+        v.into_iter()
+            .rev()
+            .take(10)
+            .enumerate()
+            .fold(String::new(), |mut s, (i, (m, b))| {
+                writeln!(
+                    &mut s,
+                    "`{:>2}. {:<20} {:>4}`<:Kapsyl:1079763140272734218>",
+                    i + 1,
+                    m.nick.unwrap_or(m.user.name),
+                    b,
+                )
+                .unwrap();
+                s
+            });
     msg.channel_id
         .send_message(
             ctx,
@@ -545,7 +546,7 @@ const DELAY_BETWEEN_EDITS: Duration = Duration::from_millis(800);
     User must be marked mature to get access."
 )]
 async fn slots(ctx: &Context, msg: &Message) -> CommandResult {
-    let uid = msg.author.id.0.get();
+    let uid = msg.author.id.get();
     let db = get_db_handler(ctx).await;
     if !db.get_user_mature(uid).await? {
         let _ = msg
@@ -631,7 +632,7 @@ async fn give(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let amount: i64 = a.parse().map_err(|_| "Invalid amount")?;
     args.advance();
     let a = args.current().unwrap();
-    let target_uid = parse_username(a).ok_or("Invalid user tag")?.get();
+    let target_uid = parse_user_mention(a).ok_or("Invalid user tag")?.get();
     let uid = msg.author.id.get();
     if let Err(e) = db
         .transfer_bank_account_balance(uid, target_uid, amount)
@@ -689,7 +690,7 @@ async fn mint(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 async fn setmature(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let a = args.current().unwrap();
-    let target_uid = parse_username(a).ok_or("Invalid user tag")?.get();
+    let target_uid = parse_user_mention(a).ok_or("Invalid user tag")?.get();
     args.advance();
     let a = args.current().unwrap();
     let mature: bool = a.parse().map_err(|_| "Invalid bool")?;
