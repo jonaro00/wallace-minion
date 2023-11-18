@@ -141,10 +141,10 @@ pub async fn build_bot(
             &riot_token_tft,
         )));
         data.insert::<WallaceDB>(Arc::new(db));
-        data.insert::<WallaceOpenAI>(Arc::new(Mutex::new((
-            OpenAIClient::with_config(OpenAIConfig::new().with_api_key(openai_token)),
-            Default::default(),
-        ))));
+        data.insert::<WallaceOpenAI>(Arc::new(OpenAIClient::with_config(
+            OpenAIConfig::new().with_api_key(openai_token),
+        )));
+        data.insert::<WallaceOpenAIConvos>(Default::default());
         data.insert::<WallacePolly>(Arc::new(polly_client));
         let (tx, rx) = tokio::sync::mpsc::channel::<()>(1);
         data.insert::<TaskSignal>(Arc::new(tx));
@@ -156,104 +156,113 @@ pub async fn build_bot(
 }
 
 struct WallaceSongbird;
+type TWallaceSongbird = Arc<Songbird>;
 impl TypeMapKey for WallaceSongbird {
-    type Value = Arc<Songbird>;
+    type Value = TWallaceSongbird;
 }
-pub async fn get_songbird(ctx: &Context) -> Arc<Songbird> {
+pub async fn get_songbird(ctx: &Context) -> TWallaceSongbird {
     ctx.data
         .read()
         .await
         .get::<WallaceSongbird>()
-        .expect("Expected Songbird in TypeMap.")
+        .expect("type in typemap")
         .clone()
 }
 
 struct WallaceRiot;
+type TWallaceRiot = Arc<RiotAPIClients>;
 impl TypeMapKey for WallaceRiot {
-    type Value = Arc<RiotAPIClients>;
+    type Value = TWallaceRiot;
 }
-pub async fn get_riot_client(ctx: &Context) -> Arc<RiotAPIClients> {
+pub async fn get_riot_client(ctx: &Context) -> TWallaceRiot {
     ctx.data
         .read()
         .await
         .get::<WallaceRiot>()
-        .expect("Expected Riot Client in TypeMap.")
+        .expect("type in typemap")
         .clone()
 }
 
 struct WallaceDB;
+type TWallaceDB = Arc<PrismaClient>;
 impl TypeMapKey for WallaceDB {
-    type Value = Arc<PrismaClient>;
+    type Value = TWallaceDB;
 }
-pub async fn get_db_handler(ctx: &Context) -> Arc<PrismaClient> {
+pub async fn get_db_handler(ctx: &Context) -> TWallaceDB {
     ctx.data
         .read()
         .await
         .get::<WallaceDB>()
-        .expect("Expected DB Handler in TypeMap.")
+        .expect("type in typemap")
         .clone()
 }
 
 struct WallaceOpenAI;
+type TWallaceOpenAI = Arc<OpenAIClient<OpenAIConfig>>;
 impl TypeMapKey for WallaceOpenAI {
-    type Value = Arc<
-        Mutex<(
-            OpenAIClient<OpenAIConfig>,
-            HashMap<u64, Arc<Mutex<WallaceAIConv>>>,
-        )>,
-    >;
+    type Value = TWallaceOpenAI;
 }
-pub async fn get_openai(
-    ctx: &Context,
-) -> Arc<
-    Mutex<(
-        OpenAIClient<OpenAIConfig>,
-        HashMap<u64, Arc<Mutex<WallaceAIConv>>>,
-    )>,
-> {
+pub async fn get_openai(ctx: &Context) -> TWallaceOpenAI {
     ctx.data
         .read()
         .await
         .get::<WallaceOpenAI>()
-        .expect("Expected OpenAI Client in TypeMap.")
+        .expect("type in typemap")
+        .clone()
+}
+
+struct WallaceOpenAIConvos;
+type TWallaceOpenAIConvos = Arc<Mutex<HashMap<u64, Arc<Mutex<WallaceAIConv>>>>>;
+impl TypeMapKey for WallaceOpenAIConvos {
+    type Value = TWallaceOpenAIConvos;
+}
+pub async fn get_openai_convos(ctx: &Context) -> TWallaceOpenAIConvos {
+    ctx.data
+        .read()
+        .await
+        .get::<WallaceOpenAIConvos>()
+        .expect("type in typemap")
         .clone()
 }
 
 struct WallacePolly;
+type TWallacePolly = Arc<PollyClient>;
 impl TypeMapKey for WallacePolly {
-    type Value = Arc<PollyClient>;
+    type Value = TWallacePolly;
 }
-pub async fn get_polly(ctx: &Context) -> Arc<PollyClient> {
+pub async fn get_polly(ctx: &Context) -> TWallacePolly {
     ctx.data
         .read()
         .await
         .get::<WallacePolly>()
-        .expect("Expected AWS Polly Client in TypeMap.")
+        .expect("type in typemap")
         .clone()
 }
 struct WallaceComprehend;
+type TWallaceComprehend = Arc<ComprehendClient>;
 impl TypeMapKey for WallaceComprehend {
-    type Value = Arc<ComprehendClient>;
+    type Value = TWallaceComprehend;
 }
-pub async fn get_comprehend(ctx: &Context) -> Arc<ComprehendClient> {
+pub async fn get_comprehend(ctx: &Context) -> TWallaceComprehend {
     ctx.data
         .read()
         .await
         .get::<WallaceComprehend>()
-        .expect("Expected AWS Comprehend Client in TypeMap.")
+        .expect("type in typemap")
         .clone()
 }
 
 struct TaskSignal;
+type TTaskSignal = Arc<tokio::sync::mpsc::Sender<()>>;
 impl TypeMapKey for TaskSignal {
-    type Value = Arc<tokio::sync::mpsc::Sender<()>>;
+    type Value = TTaskSignal;
 }
-pub async fn get_task_signal(ctx: &Context) -> Arc<tokio::sync::mpsc::Sender<()>> {
+pub async fn get_task_signal(ctx: &Context) -> TTaskSignal {
     ctx.data
         .read()
         .await
         .get::<TaskSignal>()
-        .expect("Expected Task mpsc Sender in TypeMap.")
+        .expect("type in typemap")
         .clone()
 }
 struct TaskSignalRx;

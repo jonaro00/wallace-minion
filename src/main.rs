@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
+use aws_config::BehaviorVersion;
 use shuttle_secrets::{SecretStore, Secrets};
 
 use discord::build_bot;
@@ -42,7 +43,7 @@ async fn serenity(
         .get("AWS_REGION")
         .expect("AWS Region missing! (env variable `AWS_REGION`)");
 
-    let aws_config = aws_config::from_env()
+    let aws_config = aws_config::defaults(BehaviorVersion::v2023_11_09())
         .credentials_provider(aws_credential_types::Credentials::new(
             aws_key_id,
             aws_secret,

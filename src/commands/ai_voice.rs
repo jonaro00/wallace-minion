@@ -1,9 +1,11 @@
 use async_openai::types::{
-    ChatCompletionRequestMessage, ChatCompletionRequestMessageArgs,
-    CreateChatCompletionRequestArgs, CreateImageRequestArgs, CreateModerationRequestArgs,
-    ImageData, ImageSize, ResponseFormat, Role, TextModerationModel,
+    ChatChoice, ChatCompletionFunctions, ChatCompletionRequestAssistantMessageArgs,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+    ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
+    CreateModerationRequestArgs, Image, ImageSize, ResponseFormat, TextModerationModel,
 };
 use async_trait::async_trait;
+use rand::Rng;
 use serenity::{
     all::{ChannelId, GuildId},
     builder::{CreateAttachment, CreateMessage},
@@ -22,7 +24,7 @@ use symphonia::core::probe::Hint;
 use tracing::info;
 
 use crate::{
-    discord::{get_openai, get_songbird},
+    discord::{get_openai, get_openai_convos, get_songbird},
     services::{
         do_payment, get_lang_flag,
         polly::{to_mp3, PollyLanguage},
@@ -44,16 +46,28 @@ const WALLACE_PERSONALITY: &str = "
 pub struct WallaceAIConv(Vec<ChatCompletionRequestMessage>);
 impl Default for WallaceAIConv {
     fn default() -> Self {
-        Self(vec![ChatCompletionRequestMessageArgs::default()
-            .role(Role::System)
+        Self(vec![ChatCompletionRequestSystemMessageArgs::default()
             .content(WALLACE_PERSONALITY)
             .build()
-            .unwrap()])
+            .unwrap()
+            .into()])
     }
 }
 impl WallaceAIConv {
     fn add(&mut self, prompt: ChatCompletionRequestMessage, reply: ChatCompletionRequestMessage) {
         self.0.push(prompt);
+        self.0.push(reply);
+    }
+    fn add_fn_call(
+        &mut self,
+        prompt: ChatCompletionRequestMessage,
+        fn_call: ChatCompletionRequestMessage,
+        fn_result: ChatCompletionRequestMessage,
+        reply: ChatCompletionRequestMessage,
+    ) {
+        self.0.push(prompt);
+        self.0.push(fn_call);
+        self.0.push(fn_result);
         self.0.push(reply);
     }
     fn trim_history(&mut self) {
@@ -74,12 +88,7 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let input = args.rest();
     let typing = ctx.http.start_typing(msg.channel_id);
 
-    // lock the current channel conversation
-    let ai = get_openai(ctx).await;
-    let mut l1 = ai.lock().await;
-    let client = l1.0.clone();
-    let m = l1.1.entry(msg.channel_id.get()).or_default().clone();
-    drop(l1);
+    let client = get_openai(ctx).await;
 
     // check moderation policy
     let request = CreateModerationRequestArgs::default()
@@ -99,20 +108,52 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         return Ok(());
     }
 
-    let mut conv = m.lock().await; // hold lock until end of command
+    // lock the current channel conversation
+    let ai = get_openai_convos(ctx).await;
+    let conv_mx = ai
+        .lock()
+        .await
+        .entry(msg.channel_id.get())
+        .or_default()
+        .clone();
+    let mut conv = conv_mx.lock().await;
     conv.trim_history();
 
     // chat completion request
     let mut v = conv.0.clone();
-    let user_msg = ChatCompletionRequestMessageArgs::default()
-        .role(Role::User)
+    let user_msg: ChatCompletionRequestMessage = ChatCompletionRequestUserMessageArgs::default()
         .content(input)
         .build()
-        .unwrap();
+        .unwrap()
+        .into();
     v.push(user_msg.clone());
     let request = CreateChatCompletionRequestArgs::default()
         .model("gpt-4")
         .messages(v)
+        .functions(vec![
+            ChatCompletionFunctions {
+                name: "nine_plus_ten".into(),
+                description: Some("Get the answer to the equation `9 + 10`".into()),
+                parameters: serde_json::json!({"type": "object", "properties": {}}),
+            },
+            ChatCompletionFunctions {
+                name: "random_number".into(),
+                description: Some("Get a random integer between `number1` and `number2` inclusive. For example, arguments 1 and 6 would simulate a dice roll".into()),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "number1": {
+                            "type": "number"
+                        },
+                        "number2": {
+                            "type": "number"
+                        }
+                    },
+                    "required": ["number1", "number2"]
+                }),
+            },
+        ])
+        .n(1)
         .build()
         .unwrap();
 
@@ -123,29 +164,60 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     // println!("tokens {} + {}", us.prompt_tokens, us.completion_tokens);
 
     typing.stop();
-    let reply = response
-        .choices
-        .get(0)
-        .ok_or("No choices returned")?
-        .message
-        .content
-        .as_ref()
-        .ok_or("No message content")?
-        .as_str();
+    let ChatChoice {
+        finish_reason,
+        message,
+        ..
+    } = response.choices.get(0).ok_or("No choices returned")?;
+    let reply = if *finish_reason == Some(async_openai::types::FinishReason::FunctionCall) {
+        let Some(f) = message
+            .tool_calls
+            .as_ref()
+            .and_then(|v| v.get(0))
+            .map(|c| &c.function)
+        else {
+            return Err("couldn't parse response".into());
+        };
+        dbg!(&f.name, &f.arguments);
+        match f.name.as_str() {
+            "nine_plus_ten" => "21".to_owned(),
+            "random_number" => {
+                let x = f
+                    .arguments
+                    .parse::<serde_json::Value>()
+                    .expect("valid json arguments");
+                let serde_json::Value::Object(o) = x else {
+                    return Err("not an object".into());
+                };
+                let lo = o.get("number1").unwrap().as_i64().unwrap();
+                let hi = o.get("number2").unwrap().as_i64().unwrap();
+                let r: i64 = rand::thread_rng().gen_range(lo..=hi);
+                r.to_string()
+            }
+            _ => "unknown function called".to_owned(),
+        }
+    } else {
+        message
+            .content
+            .as_ref()
+            .ok_or("No message content")?
+            .to_owned()
+    };
     let reply2 = format!("`Wallace AI:`\n{reply}");
     let mut chars = reply2.chars().peekable();
     while chars.peek().is_some() {
         let s: String = chars.by_ref().take(2000).collect();
         msg.channel_id.say(ctx, s).await?;
     }
-    let assistant_msg = ChatCompletionRequestMessageArgs::default()
-        .role(Role::Assistant)
-        .content(reply)
+    let assistant_msg = ChatCompletionRequestAssistantMessageArgs::default()
+        .content(reply.as_str())
         .build()
-        .unwrap();
+        .unwrap()
+        .into();
     conv.add(user_msg, assistant_msg);
+    drop(conv);
 
-    let _ = play_text_voice(ctx, msg, reply, lang).await;
+    let _ = play_text_voice(ctx, msg, reply.as_str(), lang).await;
 
     Ok(())
 }
@@ -154,9 +226,9 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[description("Reset the context of the conversation")]
 async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
     // lock the current channel conversation
-    let ai = get_openai(ctx).await;
+    let ai = get_openai_convos(ctx).await;
     let mut l1 = ai.lock().await;
-    let m = l1.1.entry(msg.channel_id.get()).or_default().clone();
+    let m = l1.entry(msg.channel_id.get()).or_default().clone();
     drop(l1);
     let mut conv = m.lock().await;
     conv.reset();
@@ -172,10 +244,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         return Ok(());
     }
 
-    let ai = get_openai(ctx).await;
-    let l1 = ai.lock().await;
-    let client = l1.0.clone();
-    drop(l1);
+    let client = get_openai(ctx).await;
 
     let input = args.rest();
     let typing = ctx.http.start_typing(msg.channel_id);
@@ -212,11 +281,11 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     typing.stop();
     let reply = match &**response.data.get(0).ok_or("No images returned")? {
-        ImageData::Url(_) => panic!("url response not used"),
-        ImageData::B64Json(b64) => {
+        Image::Url { .. } => panic!("url response not used"),
+        Image::B64Json { b64_json, .. } => {
             use base64::{engine::general_purpose, Engine as _};
             general_purpose::STANDARD
-                .decode(b64.as_str())
+                .decode(b64_json.as_str())
                 .map_err(|_| "Invalid base64")?
         }
     };
@@ -239,7 +308,13 @@ pub async fn play_text_voice(
     text: &str,
     lang: Option<PollyLanguage>,
 ) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap().to_owned();
+    let guild = match msg.guild(&ctx.cache) {
+        None => {
+            info!("Skipping voice. Not in a guild.");
+            return Ok(());
+        }
+        Some(guild) => guild.to_owned(),
+    };
     let guild_id = guild.id;
     let channel_id = if let Some(cid) = guild
         .voice_states

@@ -142,7 +142,7 @@ pub async fn to_mp3(
             .await
             .map_err(|_| "call to comprehend failed")?;
         resp.languages()
-            .and_then(|ls| ls.get(0))
+            .get(0)
             .and_then(|l| l.language_code())
             .unwrap_or_default()
             .parse()

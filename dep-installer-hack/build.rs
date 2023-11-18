@@ -1,9 +1,6 @@
 fn main() {
     // Install external dependency (in the shuttle container only)
-    if std::env::var("HOSTNAME")
-        .unwrap_or_default()
-        .contains("shuttle")
-    {
+    if std::env::var("SHUTTLE").is_ok() {
         if !std::process::Command::new("apt")
             .arg("install")
             .arg("-y")
