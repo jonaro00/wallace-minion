@@ -15,11 +15,10 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     client::{Client as DiscordClient, Context, EventHandler},
     framework::standard::{
-        buckets::LimitedFor,
         help_commands::with_embeds,
         macros::{help, hook},
-        Args, CommandError, CommandGroup, CommandResult, DispatchError, HelpOptions,
-        StandardFramework,
+        Args, BucketBuilder, CommandError, CommandGroup, CommandResult, Configuration,
+        DispatchError, HelpOptions, StandardFramework,
     },
     gateway::ActivityData,
     http::Http,
@@ -92,7 +91,7 @@ pub async fn build_bot(
         .unrecognised_command(unknown_command_hook)
         .after(after_hook)
         .on_dispatch_error(dispatch_error_hook)
-        .bucket("slots", |b| b.delay(10).limit_for(LimitedFor::Channel))
+        .bucket("slots", BucketBuilder::new_channel().delay(10))
         .await
         .group(&GENERAL_GROUP)
         .group(&AIVOICE_GROUP)
@@ -104,12 +103,13 @@ pub async fn build_bot(
         .group(&LOL_GROUP)
         .group(&TFT_GROUP)
         .help(&HELP_COMMAND);
-    framework.configure(|c| {
-        c.prefix(PREFIX)
+    framework.configure(
+        Configuration::new()
+            .prefix(PREFIX)
             .owners(owners)
             .case_insensitivity(true)
-            .on_mention(Some(bot_id))
-    });
+            .on_mention(Some(bot_id)),
+    );
     let songbird = Songbird::serenity();
     let client = DiscordClient::builder(
         discord_token,
@@ -486,8 +486,7 @@ impl ScheduleTask {
                 let g = match ctx
                     .cache
                     .channel(data.channel_id as u64)
-                    .and_then(|c| c.guild())
-                    .and_then(|g| g.guild(ctx))
+                    .and_then(|c| c.guild(ctx))
                 {
                     Some(g) => g.to_owned(),
                     None => return Err(anyhow!("")),
@@ -500,8 +499,7 @@ impl ScheduleTask {
                 let g = match ctx
                     .cache
                     .channel(data.channel_id as u64)
-                    .and_then(|c| c.guild())
-                    .and_then(|g| g.guild(ctx))
+                    .and_then(|c| c.guild(ctx))
                 {
                     Some(g) => g.to_owned(),
                     None => return Err(anyhow!("")),
@@ -511,12 +509,8 @@ impl ScheduleTask {
                 }
             }
             ScheduleTask::LolWeekly => {
-                let gc = match ctx
-                    .cache
-                    .channel(data.channel_id as u64)
-                    .and_then(|c| c.guild())
-                {
-                    Some(gc) => gc,
+                let gc = match ctx.cache.channel(data.channel_id as u64) {
+                    Some(gc) => gc.to_owned(),
                     None => return Err(anyhow!("")),
                 };
                 let _ = lol_report(ctx, gc).await;
