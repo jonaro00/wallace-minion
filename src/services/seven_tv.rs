@@ -97,6 +97,7 @@ mod tests {
     use std::time::Duration;
     use tokio::time::sleep;
     #[tokio::test]
+    #[ignore]
     async fn catjam() {
         for _ in 0..10 {
             let (name, url) = match get_emote_name_url("catjam").await {
@@ -114,6 +115,7 @@ mod tests {
         }
     }
     #[tokio::test]
+    #[ignore]
     async fn catjam_quoted() {
         for _ in 0..10 {
             let (name, url) = match get_emote_name_url("\"catJAM\"").await {
@@ -131,6 +133,7 @@ mod tests {
         }
     }
     #[tokio::test]
+    #[ignore]
     async fn prayge() {
         for _ in 0..10 {
             let (name, url) = match get_emote_name_url("pray").await {
@@ -165,6 +168,7 @@ mod tests {
         assert!(get_emote_name_url("\n").await.is_err());
     }
     #[tokio::test]
+    #[ignore]
     async fn not_found() {
         assert!(get_emote_name_url("somethingthatwillprobablyneverexist")
             .await
