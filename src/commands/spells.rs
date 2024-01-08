@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt::Display, time::Duration};
 
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
@@ -35,6 +35,19 @@ pub enum SpellPrice {
     Free,
     Cost(i64),
     AtLeast(i64),
+}
+impl Display for SpellPrice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SpellPrice::Free => "Free".into(),
+                SpellPrice::Cost(q) => format!("{q} 𝓚"),
+                SpellPrice::AtLeast(q) => format!("{q}+ 𝓚"),
+            }
+        )
+    }
 }
 pub static SHOPPABLE_SPELLS_AND_PRICES: &[(&Command, SpellPrice)] = &[
     (&GAMBA_COMMAND, SpellPrice::AtLeast(1)),

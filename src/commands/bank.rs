@@ -14,7 +14,7 @@ use serenity::{
 };
 use tokio::time::sleep;
 
-use super::spells::{SpellPrice, SHOPPABLE_SPELLS_AND_PRICES};
+use super::spells::SHOPPABLE_SPELLS_AND_PRICES;
 use crate::{
     database::WallaceDBClient,
     discord::{get_db_handler, PREFIX},
@@ -149,17 +149,8 @@ async fn shop(ctx: &Context, msg: &Message) -> CommandResult {
                             .iter()
                             .map(|(c, p)| {
                                 format!(
-                                    "**{}{}** `{}{}` {}",
-                                    match p {
-                                        SpellPrice::Free => "Free".into(),
-                                        SpellPrice::Cost(q) => q.to_string(),
-                                        SpellPrice::AtLeast(q) => format!("{q}+"),
-                                    },
-                                    if let SpellPrice::Free = p {
-                                        ""
-                                    } else {
-                                        " 𝓚"
-                                    },
+                                    "**{}** `{}{}` {}",
+                                    p,
                                     PREFIX,
                                     c.options.names[0],
                                     c.options.desc.unwrap_or_default()

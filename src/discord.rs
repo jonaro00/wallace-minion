@@ -26,6 +26,7 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use songbird::Songbird;
+use sqlx::PgPool;
 use strum::EnumString;
 use tokio::{sync::Mutex, task::JoinHandle, time::Duration};
 use tracing::{error, info, warn};
@@ -42,7 +43,7 @@ use crate::{
         spells::{random_name, SPELLS_GROUP},
     },
     database::WallaceDBClient,
-    prisma::{self, new_client_with_url, PrismaClient},
+    model::Task,
     services::{riot_api::RiotAPIClients, set_server_name},
 };
 
@@ -123,7 +124,7 @@ pub async fn build_bot(
     .await
     .expect("Error creating Discord client");
 
-    let db = new_client_with_url(&db_url)
+    let db = sqlx::pool::Pool::connect(&db_url)
         .await
         .expect("Database connection failed.");
     info!("Connected to database!");
@@ -184,7 +185,7 @@ pub async fn get_riot_client(ctx: &Context) -> TWallaceRiot {
 }
 
 struct WallaceDB;
-type TWallaceDB = Arc<PrismaClient>;
+type TWallaceDB = Arc<PgPool>;
 impl TypeMapKey for WallaceDB {
     type Value = TWallaceDB;
 }
@@ -472,7 +473,7 @@ pub enum ScheduleTask {
 }
 
 impl ScheduleTask {
-    pub async fn run(&self, ctx: &Context, data: &prisma::task::Data) -> anyhow::Result<()> {
+    pub async fn run(&self, ctx: &Context, data: &Task) -> anyhow::Result<()> {
         let db = get_db_handler(ctx).await;
         match self {
             ScheduleTask::Say => {

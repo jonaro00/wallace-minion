@@ -41,7 +41,7 @@ async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
 #[min_args(2)]
 #[description("Add summoners to the weekly report.")]
 #[usage("<user> <summoners...>")]
-#[example("@jonaro00 \"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
+#[example(r#"@jonaro00 "EUNE:MupDef Crispy" "EUW:WallaceBigBrain""#)]
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let user = args.current().unwrap().to_owned();
@@ -165,7 +165,7 @@ async fn push_playtime_str(
 #[min_args(1)]
 #[description("Calculate LoL+TFT playtime for summoner(s).")]
 #[usage("<summoners...>")]
-#[example("\"EUNE:MupDef Crispy\" \"EUW:WallaceBigBrain\"")]
+#[example(r#""EUNE:MupDef Crispy" "EUW:WallaceBigBrain""#)]
 async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let typing = ctx.http.start_typing(msg.channel_id);
@@ -231,7 +231,7 @@ async fn tft(_ctx: &Context, _msg: &Message, mut _args: Args) -> CommandResult {
 #[num_args(1)]
 #[description("Calculate TFT stats for the current set.")]
 #[usage("<summoner>")]
-#[example("\"EUW:Thebausffs\"")]
+#[example(r#""EUW:Thebausffs""#)]
 async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let arg = args.current().unwrap().to_owned();

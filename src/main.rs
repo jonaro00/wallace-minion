@@ -9,8 +9,7 @@ use discord::build_bot;
 mod commands;
 mod database;
 mod discord;
-#[allow(warnings, unused)]
-mod prisma;
+mod model;
 mod services;
 
 #[shuttle_runtime::main]

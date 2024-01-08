@@ -91,7 +91,7 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .channel_id
         .say(
             ctx,
-            res.map(|t| format!("Added task. ID: {}", t.id))
+            res.map(|_| "Added task.".to_owned())
                 .unwrap_or_else(|e| e.to_string()),
         )
         .await;

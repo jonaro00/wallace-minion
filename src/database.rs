@@ -1,401 +1,440 @@
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Error, Result};
-use async_trait::async_trait;
+use sqlx::{Acquire, PgConnection, PgPool};
 use tracing::warn;
 
-use crate::prisma::*;
+use crate::model::{LoLAccount, Task, User};
 
-#[async_trait]
+fn log_error(err: impl std::error::Error, msg: &'static str) -> Error {
+    warn!("Database error: {err}");
+    anyhow!(msg)
+}
+fn positive(amount: i64) -> Result<()> {
+    if !amount.is_positive() {
+        return Err(anyhow!("Non-positive amount"));
+    }
+    Ok(())
+}
+
 pub trait WallaceDBClient {
-    async fn do_trx<T, F, FFut>(&self, func: F) -> Result<T>
-    where
-        T: Send,
-        FFut: Future<Output = Result<T>> + Send,
-        F: FnOnce(Arc<PrismaClient>) -> FFut + Send;
-    fn log_error(&self, err: impl std::error::Error, msg: &'static str) -> Error {
-        warn!("Database error: {err}");
-        anyhow!(msg)
-    }
-    fn positive(&self, amount: i64) -> Result<()> {
-        if !amount.is_positive() {
-            return Err(anyhow!("Non-positive amount"));
-        }
-        Ok(())
-    }
-    async fn upsert_guild(&self, id: u64) -> Result<guild::Data>;
+    async fn upsert_guild(self, id: u64) -> Result<()>;
+    async fn set_guild_default_name(self, id: u64, value: String) -> Result<()>;
+    async fn get_guild_default_name(self, id: u64) -> Result<String>;
+    async fn get_guild_random_names(self, id: u64) -> Result<(Vec<String>, Vec<String>)>;
+    async fn add_guild_random_name_subject(self, id: u64, value: String) -> Result<()>;
+    async fn add_guild_random_name_object(self, id: u64, value: String) -> Result<()>;
+    async fn upsert_user(self, id: u64) -> Result<()>;
+    async fn get_user_mature(self, id: u64) -> Result<bool>;
+    async fn set_user_mature(self, id: u64, mature: bool) -> Result<()>;
+    async fn get_all_users(self) -> Result<Vec<User>>;
+    async fn create_lol_account(self, server: String, summoner: String, user_id: u64)
+        -> Result<()>;
+    async fn delete_lol_account(self, server: String, summoner: String) -> Result<()>;
+    async fn get_all_lol_accounts_in_user(self, id: u64) -> Result<Vec<LoLAccount>>;
+    async fn create_bank_account(self, user_id: u64) -> Result<()>;
+    async fn delete_bank_account(self, user_id: u64) -> Result<()>;
+    async fn get_bank_account_balance(self, user_id: u64) -> Result<i64>;
+    async fn has_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()>;
+    async fn add_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()>;
+    async fn subtract_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()>;
     async fn transfer_bank_account_balance(
-        &self,
+        self,
         from_user_id: u64,
         to_user_id: u64,
         amount: i64,
-    ) -> Result<(i64, i64)>;
-    async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Data>;
-    async fn get_guild_default_name(&self, id: u64) -> Result<String>;
-    async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)>;
-    async fn add_guild_random_name_subject(
-        &self,
-        id: u64,
-        value: String,
-    ) -> Result<rn_subject::Data>;
-    async fn add_guild_random_name_object(&self, id: u64, value: String)
-        -> Result<rn_object::Data>;
-    async fn upsert_user(&self, id: u64) -> Result<user::Data>;
-    async fn get_user_mature(&self, id: u64) -> Result<bool>;
-    async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Data>;
-    async fn get_all_users(&self) -> Result<Vec<user::Data>>;
-    async fn create_lol_account(
-        &self,
-        server: String,
-        summoner: String,
-        user_id: u64,
-    ) -> Result<lol_account::Data>;
-    async fn delete_lol_account(
-        &self,
-        server: String,
-        summoner: String,
-    ) -> Result<lol_account::Data>;
-    async fn get_all_lol_accounts_in_user(&self, id: u64) -> Result<Vec<lol_account::Data>>;
-    async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Data>;
-    async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Data>;
-    async fn delete_bank_account(&self, user_id: u64) -> Result<bank_account::Data>;
-    async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64>;
-    async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<()>;
-    async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64>;
-    async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64>;
-    async fn upsert_channel(&self, id: u64) -> Result<channel::Data>;
+    ) -> Result<()>;
+    async fn upsert_channel(self, id: u64) -> Result<()>;
     async fn create_task(
-        &self,
+        self,
         cron: String,
         cmd: String,
         arg: Option<String>,
         channel_id: u64,
-    ) -> Result<task::Data>;
-    async fn delete_task(&self, id: i32) -> Result<task::Data>;
-    async fn get_all_tasks(&self) -> Result<Vec<task::Data>>;
-    async fn get_all_tasks_in_channel(&self, id: u64) -> Result<Vec<task::Data>>;
+    ) -> Result<()>;
+    async fn delete_task(self, id: i32) -> Result<()>;
+    async fn get_all_tasks(self) -> Result<Vec<Task>>;
+    async fn get_all_tasks_in_channel(self, id: u64) -> Result<Vec<Task>>;
 }
 
-#[async_trait]
-impl WallaceDBClient for PrismaClient {
-    async fn do_trx<T, F, FFut>(&self, func: F) -> Result<T>
-    where
-        T: Send,
-        FFut: Future<Output = Result<T>> + Send,
-        F: FnOnce(Arc<PrismaClient>) -> FFut + Send,
-    {
-        let (tx, tx_client) = self._transaction().begin().await?;
-        let a = Arc::new(tx_client);
-        match func(a.clone()).await {
-            ok @ Ok(_) => {
-                let tx_client =
-                    Arc::try_unwrap(a).expect("the reference in the transaction to be dropped");
-                tx.commit(tx_client)
-                    .await
-                    .map_err(|_| anyhow!("Failed to commit transaction"))?;
-                ok
-            }
-            err @ Err(_) => {
-                let tx_client =
-                    Arc::try_unwrap(a).expect("the reference in the transaction to be dropped");
-                tx.rollback(tx_client)
-                    .await
-                    .map_err(|_| anyhow!("Failed to rollback transaction"))?;
-                err
-            }
-        }
-    }
-    async fn upsert_guild(&self, id: u64) -> Result<guild::Data> {
-        self.guild()
-            .upsert(guild::id::equals(id as i64), (id as i64, vec![]), vec![])
-            .exec()
+impl WallaceDBClient for &mut PgConnection {
+    async fn upsert_guild(self, id: u64) -> Result<()> {
+        sqlx::query("INSERT INTO guild VALUES ($1) ON CONFLICT DO NOTHING")
+            .bind(id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to update guild"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to upsert guild"))
     }
-    async fn set_guild_default_name(&self, id: u64, value: String) -> Result<guild::Data> {
-        self.guild()
-            .upsert(
-                guild::id::equals(id as i64),
-                (
-                    id as i64,
-                    vec![guild::default_name::set(Some(value.clone()))],
-                ),
-                vec![guild::default_name::set(Some(value))],
-            )
-            .exec()
+    async fn set_guild_default_name(self, id: u64, value: String) -> Result<()> {
+        sqlx::query("UPDATE guild SET default_name = $1 WHERE id = $2")
+            .bind(value)
+            .bind(id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to update guild"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to update guild"))
     }
-    async fn get_guild_default_name(&self, id: u64) -> Result<String> {
-        self.guild()
-            .find_unique(guild::id::equals(id as i64))
-            .exec()
-            .await
-            .map_err(|q| self.log_error(q, "Failed to get guild"))?
-            .ok_or_else(|| anyhow!("Guild not found"))?
-            .default_name
-            .ok_or_else(|| anyhow!("No default name set"))
+    async fn get_guild_default_name(self, id: u64) -> Result<String> {
+        sqlx::query_as::<_, (Option<String>,)>("SELECT default_name FROM guild WHERE id = $1")
+            .bind(id as i64)
+            .fetch_one(self)
+            .await?
+            .0
+            .ok_or_else(|| anyhow!("No default name"))
     }
-    async fn get_guild_random_names(&self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
-        let r = self
-            .guild()
-            .find_unique(guild::id::equals(id as i64))
-            .with(guild::rn_subject::fetch(vec![]))
-            .with(guild::rn_object::fetch(vec![]))
-            .exec()
-            .await
-            .map_err(|q| self.log_error(q, "Failed to get guild"))?
-            .ok_or_else(|| anyhow!("Guild not found"))?;
-        let subs = r
-            .rn_subject()
-            .map_err(|r| self.log_error(r, "Failed to fetch subjects"))?;
-        let objs = r
-            .rn_object()
-            .map_err(|r| self.log_error(r, "Failed to fetch objects"))?;
-        Ok((
-            subs.iter().map(|s| s.value.clone()).collect(),
-            objs.iter().map(|s| s.value.clone()).collect(),
-        ))
+    async fn get_guild_random_names(self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
+        let conn = self.acquire().await?;
+        let subs = sqlx::query_as::<_, (String,)>(
+            "SELECT r.value FROM guild g JOIN rn_subject r ON g.id = r.guild_id WHERE id = $1",
+        )
+        .bind(id as i64)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|r| log_error(r, "Failed to fetch subjects"))?
+        .into_iter()
+        .map(|s| s.0)
+        .collect();
+        let objs = sqlx::query_as::<_, (String,)>(
+            "SELECT r.value FROM guild g JOIN rn_object r ON g.id = r.guild_id WHERE id = $1",
+        )
+        .bind(id as i64)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|r| log_error(r, "Failed to fetch objects"))?
+        .into_iter()
+        .map(|s| s.0)
+        .collect();
+        Ok((subs, objs))
     }
-    async fn add_guild_random_name_subject(
-        &self,
-        id: u64,
-        value: String,
-    ) -> Result<rn_subject::Data> {
-        self.upsert_guild(id).await?;
-        self.rn_subject()
-            .create(value, guild::id::equals(id as i64), vec![])
-            .exec()
+    async fn add_guild_random_name_subject(self, id: u64, value: String) -> Result<()> {
+        let conn = self.acquire().await?;
+        conn.upsert_guild(id).await?;
+        sqlx::query("INSERT INTO rn_subject VALUES ($1, $2)")
+            .bind(id as i64)
+            .bind(value)
+            .execute(&mut *conn)
             .await
-            .map_err(|q| self.log_error(q, "Failed to create subject"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to create subject"))
     }
-    async fn add_guild_random_name_object(
-        &self,
-        id: u64,
-        value: String,
-    ) -> Result<rn_object::Data> {
-        self.upsert_guild(id).await?;
-        self.rn_object()
-            .create(value, guild::id::equals(id as i64), vec![])
-            .exec()
+    async fn add_guild_random_name_object(self, id: u64, value: String) -> Result<()> {
+        let conn = self.acquire().await?;
+        conn.upsert_guild(id).await?;
+        sqlx::query("INSERT INTO rn_object VALUES ($1, $2)")
+            .bind(id as i64)
+            .bind(value)
+            .execute(&mut *conn)
             .await
-            .map_err(|q| self.log_error(q, "Failed to create object"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to create object"))
     }
-    async fn upsert_user(&self, id: u64) -> Result<user::Data> {
-        self.user()
-            .upsert(user::id::equals(id as i64), (id as i64, vec![]), vec![])
-            .exec()
+    async fn upsert_user(self, id: u64) -> Result<()> {
+        sqlx::query(r#"INSERT INTO "user" VALUES ($1) ON CONFLICT DO NOTHING"#)
+            .bind(id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to update user"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to upsert user"))
     }
-    async fn get_user_mature(&self, id: u64) -> Result<bool> {
-        self.user()
-            .find_unique(user::id::equals(id as i64))
-            .exec()
+    async fn get_user_mature(self, id: u64) -> Result<bool> {
+        sqlx::query_as::<_, (bool,)>(r#"SELECT mature FROM "user" WHERE id = $1"#)
+            .bind(id as i64)
+            .fetch_one(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get user"))
-            .and_then(|u| u.ok_or_else(|| anyhow!("User not registered in Wallace")))
-            .map(|u| u.mature)
+            .map(|u| u.0)
+            .map_err(|q| log_error(q, "Failed to get user"))
     }
-    async fn set_user_mature(&self, id: u64, mature: bool) -> Result<user::Data> {
-        self.user()
-            .update(user::id::equals(id as i64), vec![user::mature::set(mature)])
-            .exec()
+    async fn set_user_mature(self, id: u64, mature: bool) -> Result<()> {
+        sqlx::query(r#"UPDATE "user" SET mature = $1 WHERE id = $2"#)
+            .bind(mature)
+            .bind(id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to update user"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to update user"))
     }
-    async fn get_all_users(&self) -> Result<Vec<user::Data>> {
-        self.user()
-            .find_many(vec![])
-            .exec()
+    async fn get_all_users(self) -> Result<Vec<User>> {
+        sqlx::query_as(r#"SELECT * FROM "user""#)
+            .fetch_all(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get users"))
+            .map_err(|q| log_error(q, "Failed to get users"))
     }
     async fn create_lol_account(
-        &self,
+        self,
         server: String,
         summoner: String,
         user_id: u64,
-    ) -> Result<lol_account::Data> {
-        self.upsert_user(user_id).await?;
-        self.lol_account()
-            .create(server, summoner, user::id::equals(user_id as i64), vec![])
-            .exec()
+    ) -> Result<()> {
+        let conn = self.acquire().await?;
+        conn.upsert_user(user_id).await?;
+        sqlx::query("INSERT INTO lol_account VALUES ($1, $2, $3)")
+            .bind(server)
+            .bind(summoner)
+            .bind(user_id as i64)
+            .execute(&mut *conn)
             .await
-            .map_err(|q| self.log_error(q, "Failed to create LoL account"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to create LoL account"))
     }
-    async fn delete_lol_account(
-        &self,
-        server: String,
-        summoner: String,
-    ) -> Result<lol_account::Data> {
-        let a = self
-            .lol_account()
-            .find_first(vec![
-                lol_account::server::equals(server),
-                lol_account::summoner::equals(summoner),
-            ])
-            .exec()
+    async fn delete_lol_account(self, server: String, summoner: String) -> Result<()> {
+        sqlx::query("DELETE FROM lol_account WHERE server = $1 AND summoner = $2")
+            .bind(server)
+            .bind(summoner)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get account"))?
-            .ok_or_else(|| anyhow!("LoL account not found"))?;
-        self.lol_account()
-            .delete(lol_account::id::equals(a.id))
-            .exec()
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to delete LoL account"))
+    }
+    async fn get_all_lol_accounts_in_user(self, id: u64) -> Result<Vec<LoLAccount>> {
+        sqlx::query_as::<_, LoLAccount>(r#"SELECT l.server, l.summoner FROM "user" u JOIN lol_account l ON u.id = l.user_id WHERE u.id = $1"#)
+            .bind(id as i64)
+            .fetch_all(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to delete LoL account"))
+            .map_err(|q| log_error(q, "Failed to get LoL accounts"))
     }
-    async fn get_all_lol_accounts_in_user(&self, id: u64) -> Result<Vec<lol_account::Data>> {
-        self.user()
-            .find_unique(user::id::equals(id as i64))
-            .with(user::lol_account::fetch(vec![]))
-            .exec()
+    async fn create_bank_account(self, user_id: u64) -> Result<()> {
+        let conn = self.acquire().await?;
+        conn.upsert_user(user_id).await?;
+        sqlx::query("INSERT INTO bank_account VALUES ($1) ON CONFLICT DO NOTHING")
+            .bind(user_id as i64)
+            .execute(&mut *conn)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get user"))?
-            .ok_or_else(|| anyhow!("User not found"))?
-            .lol_account()
-            .cloned()
-            .map_err(|r| self.log_error(r, "Failed to fetch LoL accounts"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to create bank account"))
     }
-    async fn get_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
-        self.user()
-            .find_unique(user::id::equals(user_id as i64))
-            .with(user::bank_account::fetch())
-            .exec()
+    async fn delete_bank_account(self, user_id: u64) -> Result<()> {
+        sqlx::query("DELETE FROM bank_account WHERE user_id = $1")
+            .bind(user_id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get user"))?
-            .ok_or_else(|| anyhow!("User not found"))?
-            .bank_account()
-            .map_err(|r| self.log_error(r, "Failed to fetch bank account"))?
-            .ok_or_else(|| anyhow!("Bank account not found"))
-            .cloned()
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to delete bank account"))
     }
-    async fn create_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
-        if self.get_bank_account(user_id).await.is_ok() {
-            return Err(anyhow!("Account already open"));
-        }
-        self.upsert_user(user_id).await?;
-        self.bank_account()
-            .create(user_id as i64, vec![])
-            .exec()
+    async fn get_bank_account_balance(self, user_id: u64) -> Result<i64> {
+        sqlx::query_as::<_, (i64,)>("SELECT balance FROM bank_account WHERE user_id = $1")
+            .bind(user_id as i64)
+            .fetch_one(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to create bank account"))
+            .map(|u| u.0)
+            .map_err(|q| log_error(q, "Failed to get balance"))
     }
-    async fn delete_bank_account(&self, user_id: u64) -> Result<bank_account::Data> {
-        self.bank_account()
-            .delete(bank_account::user_id::equals(user_id as i64))
-            .exec()
-            .await
-            .map_err(|q| self.log_error(q, "Failed to delete bank account"))
-    }
-    async fn get_bank_account_balance(&self, user_id: u64) -> Result<i64> {
-        let a = self.get_bank_account(user_id).await?;
-        Ok(a.balance)
-    }
-    async fn has_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<()> {
-        self.positive(amount)?;
+    async fn has_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
+        positive(amount)?;
         if amount > self.get_bank_account_balance(user_id).await? {
             return Err(anyhow!("Account balance too low"));
         }
         Ok(())
     }
-    async fn add_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
-        self.positive(amount)?;
-        self.bank_account()
-            .update(
-                bank_account::user_id::equals(user_id as i64),
-                vec![bank_account::balance::increment(amount)],
-            )
-            .exec()
+    async fn add_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
+        positive(amount)?;
+        sqlx::query("UPDATE bank_account SET balance = balance + $1 WHERE user_id = $2")
+            .bind(amount)
+            .bind(user_id as i64)
+            .execute(self)
             .await
-            .map(|b| b.balance)
-            .map_err(|q| self.log_error(q, "Failed to update balance"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to update balance"))
     }
-    async fn subtract_bank_account_balance(&self, user_id: u64, amount: i64) -> Result<i64> {
-        self.positive(amount)?;
-        self.has_bank_account_balance(user_id, amount).await?;
-        self.bank_account()
-            .update(
-                bank_account::user_id::equals(user_id as i64),
-                vec![bank_account::balance::decrement(amount)],
-            )
-            .exec()
+    async fn subtract_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
+        positive(amount)?;
+        let mut tr = self.begin().await?;
+        (&mut tr).has_bank_account_balance(user_id, amount).await?;
+        let r = sqlx::query("UPDATE bank_account SET balance = balance - $1 WHERE user_id = $2")
+            .bind(amount)
+            .bind(user_id as i64)
+            .execute(&mut *tr)
             .await
-            .map(|b| b.balance)
-            .map_err(|q| self.log_error(q, "Failed to update balance"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to update balance"))?;
+        tr.commit().await?;
+        Ok(r)
     }
     async fn transfer_bank_account_balance(
-        &self,
+        self,
         from_user_id: u64,
         to_user_id: u64,
         amount: i64,
-    ) -> Result<(i64, i64)> {
+    ) -> Result<()> {
         if from_user_id == to_user_id {
             return Err(anyhow!("Can't transfer to self"));
         }
-        let (r1, r2) = self
-            .do_trx(|tx_client| async move {
-                let r1 = tx_client
-                    .subtract_bank_account_balance(from_user_id, amount)
-                    .await?;
-                let r2 = tx_client
-                    .add_bank_account_balance(to_user_id, amount)
-                    .await?;
-                Ok((r1, r2))
-            })
+        let mut tr = self.begin().await?;
+        (&mut tr)
+            .subtract_bank_account_balance(from_user_id, amount)
             .await?;
-        Ok((r1, r2))
+        (&mut tr)
+            .add_bank_account_balance(to_user_id, amount)
+            .await?;
+        tr.commit().await?;
+        Ok(())
     }
-    async fn upsert_channel(&self, id: u64) -> Result<channel::Data> {
-        self.channel()
-            .upsert(channel::id::equals(id as i64), (id as i64, vec![]), vec![])
-            .exec()
+    async fn upsert_channel(self, id: u64) -> Result<()> {
+        sqlx::query("INSERT INTO channel VALUES ($1) ON CONFLICT DO NOTHING")
+            .bind(id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to update channel"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to upsert channel"))
     }
     async fn create_task(
-        &self,
+        self,
         cron: String,
         cmd: String,
         arg: Option<String>,
         channel_id: u64,
-    ) -> Result<task::Data> {
-        self.upsert_channel(channel_id).await?;
-        self.task()
-            .create(
-                cron,
-                cmd,
-                channel::id::equals(channel_id as i64),
-                vec![task::arg::set(arg)],
-            )
-            .exec()
+    ) -> Result<()> {
+        let conn = self.acquire().await?;
+        conn.upsert_channel(channel_id).await?;
+        sqlx::query("INSERT INTO task VALUES ($1, $2, $3, $4)")
+            .bind(cron)
+            .bind(cmd)
+            .bind(arg)
+            .bind(channel_id as i64)
+            .execute(&mut *conn)
             .await
-            .map_err(|q| self.log_error(q, "Failed to create task"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to create task"))
     }
-    async fn delete_task(&self, id: i32) -> Result<task::Data> {
-        self.task()
-            .delete(task::id::equals(id))
-            .exec()
+    async fn delete_task(self, id: i32) -> Result<()> {
+        sqlx::query("DELETE FROM task WHERE id = $1")
+            .bind(id as i64)
+            .execute(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to delete task"))
+            .map(|_| ())
+            .map_err(|q| log_error(q, "Failed to delete task"))
     }
-    async fn get_all_tasks(&self) -> Result<Vec<task::Data>> {
-        self.task()
-            .find_many(vec![])
-            .exec()
+    async fn get_all_tasks(self) -> Result<Vec<Task>> {
+        sqlx::query_as("SELECT * FROM task")
+            .fetch_all(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get tasks"))
+            .map_err(|q| log_error(q, "Failed to get tasks"))
     }
-    async fn get_all_tasks_in_channel(&self, id: u64) -> Result<Vec<task::Data>> {
-        self.channel()
-            .find_unique(channel::id::equals(id as i64))
-            .with(channel::task::fetch(vec![]))
-            .exec()
+    async fn get_all_tasks_in_channel(self, id: u64) -> Result<Vec<Task>> {
+        sqlx::query_as("SELECT * FROM task WHERE channel_id = $1")
+            .bind(id as i64)
+            .fetch_all(self)
             .await
-            .map_err(|q| self.log_error(q, "Failed to get channel"))?
-            .ok_or_else(|| anyhow!("Channel not found"))?
-            .task()
-            .cloned()
-            .map_err(|r| self.log_error(r, "Failed to fetch tasks"))
+            .map_err(|q| log_error(q, "Failed to get tasks"))
+    }
+}
+
+impl WallaceDBClient for &Arc<PgPool> {
+    async fn upsert_guild(self, id: u64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.upsert_guild(id).await
+    }
+    async fn set_guild_default_name(self, id: u64, value: String) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.set_guild_default_name(id, value).await
+    }
+    async fn get_guild_default_name(self, id: u64) -> Result<String> {
+        let mut conn = self.acquire().await?;
+        conn.get_guild_default_name(id).await
+    }
+    async fn get_guild_random_names(self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
+        let mut conn = self.acquire().await?;
+        conn.get_guild_random_names(id).await
+    }
+    async fn add_guild_random_name_subject(self, id: u64, value: String) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.add_guild_random_name_subject(id, value).await
+    }
+    async fn add_guild_random_name_object(self, id: u64, value: String) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.add_guild_random_name_object(id, value).await
+    }
+    async fn upsert_user(self, id: u64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.upsert_user(id).await
+    }
+    async fn get_user_mature(self, id: u64) -> Result<bool> {
+        let mut conn = self.acquire().await?;
+        conn.get_user_mature(id).await
+    }
+    async fn set_user_mature(self, id: u64, mature: bool) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.set_user_mature(id, mature).await
+    }
+    async fn get_all_users(self) -> Result<Vec<User>> {
+        let mut conn = self.acquire().await?;
+        conn.get_all_users().await
+    }
+    async fn create_lol_account(
+        self,
+        server: String,
+        summoner: String,
+        user_id: u64,
+    ) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.create_lol_account(server, summoner, user_id).await
+    }
+    async fn delete_lol_account(self, server: String, summoner: String) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.delete_lol_account(server, summoner).await
+    }
+    async fn get_all_lol_accounts_in_user(self, id: u64) -> Result<Vec<LoLAccount>> {
+        let mut conn = self.acquire().await?;
+        conn.get_all_lol_accounts_in_user(id).await
+    }
+    async fn create_bank_account(self, user_id: u64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.create_bank_account(user_id).await
+    }
+    async fn delete_bank_account(self, user_id: u64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.delete_bank_account(user_id).await
+    }
+    async fn get_bank_account_balance(self, user_id: u64) -> Result<i64> {
+        let mut conn = self.acquire().await?;
+        conn.get_bank_account_balance(user_id).await
+    }
+    async fn has_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.has_bank_account_balance(user_id, amount).await
+    }
+    async fn add_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.add_bank_account_balance(user_id, amount).await
+    }
+    async fn subtract_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.subtract_bank_account_balance(user_id, amount).await
+    }
+    async fn transfer_bank_account_balance(
+        self,
+        from_user_id: u64,
+        to_user_id: u64,
+        amount: i64,
+    ) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.transfer_bank_account_balance(from_user_id, to_user_id, amount)
+            .await
+    }
+    async fn upsert_channel(self, id: u64) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.upsert_channel(id).await
+    }
+    async fn create_task(
+        self,
+        cron: String,
+        cmd: String,
+        arg: Option<String>,
+        channel_id: u64,
+    ) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.create_task(cron, cmd, arg, channel_id).await
+    }
+    async fn delete_task(self, id: i32) -> Result<()> {
+        let mut conn = self.acquire().await?;
+        conn.delete_task(id).await
+    }
+    async fn get_all_tasks(self) -> Result<Vec<Task>> {
+        let mut conn = self.acquire().await?;
+        conn.get_all_tasks().await
+    }
+    async fn get_all_tasks_in_channel(self, id: u64) -> Result<Vec<Task>> {
+        let mut conn = self.acquire().await?;
+        conn.get_all_tasks_in_channel(id).await
     }
 }

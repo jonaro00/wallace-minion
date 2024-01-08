@@ -14,7 +14,7 @@ If there is enough interest, I might make a demo server where you can try it out
 
 - Made with [Rust](https://www.rust-lang.org/) 🦀
 - Bot hosted on [Shuttle](https://www.shuttle.rs/) 🚀
-- Postgres database in [Neon](https://neon.tech/) 🐘 managed with [Prisma](https://prisma.brendonovich.dev/) 🔼
+- Postgres database in [Neon](https://neon.tech/) 🐘 managed with [Prisma](https://prisma.brendonovich.dev/) 🔼 queried with [sqlx](https://github.com/launchbadge/sqlx)
 - Discord framework [Serenity](https://github.com/serenity-rs/serenity) 🏞 + [Songbird](https://github.com/serenity-rs/songbird) 🐦
 - APIs: [OpenAI](https://platform.openai.com/docs/api-reference) 🤖, [AWS](https://aws.amazon.com/) 🛤, [7TV](https://7tv.app/) 🐸, [Riot](https://developer.riotgames.com/) 👊
 
@@ -33,9 +33,7 @@ The detected language can be overridden to make some fun accents 😅.
 
 https://user-images.githubusercontent.com/54029719/228099216-570ac72e-ee16-48ec-aab3-f35f320cecdd.mp4
 
-*In the above video, the `!ai` and `!tts` command use language modifiers to narrate*
-*in a different language than the text.*
-*The `!say` command detects the language form the text.*
+*In the above video, the `!ai` and `!tts` command use language modifiers to narrate in a different language than the text. The `!say` command detects the language from the text.*
 
 ### ✨ Plain TTS in all supported languages 🌞
 
