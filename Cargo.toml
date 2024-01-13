@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.12.2"
+version = "0.12.3"
 edition = "2021"
 
 [workspace]
@@ -9,7 +9,7 @@ exclude = ["dep-installer-hack"]
 
 [dependencies]
 anyhow = "1"
-async-openai = "0.17"
+async-openai = "0.18"
 async-trait = "0.1"
 aws-config = "1"
 aws-credential-types = "1"
@@ -21,7 +21,7 @@ chrono = { version = "0.4.28", default-features = false }
 cron = "0.12"
 rand = "0.8"
 reqwest = { version = "0.11", default-features = false, features = ["rustls"] }
-riven = { version = "2.27", default-features = false, features = ["rustls-tls"] }
+riven = { version = "2.28", default-features = false, features = ["rustls-tls"] }
 serde = "1"
 serde_json = "1"
 serenity = { version = "0.12.0", default-features = false, features = [
@@ -32,8 +32,8 @@ serenity = { version = "0.12.0", default-features = false, features = [
     "standard_framework",
     "voice",
 ] }
-shuttle-runtime = "0.35.0"
-shuttle-secrets = "0.35.0"
+shuttle-runtime = "0.36.0"
+shuttle-secrets = "0.36.0"
 songbird = { version = "0.4.0", features = ["builtin-queue"] }
 sqlx = { version = "0.7.3", default-features = false, features = ["macros", "postgres", "runtime-tokio", "tls-rustls"] }
 strum = { version = "0.25", features = ["derive"] }
@@ -46,6 +46,3 @@ git = "https://github.com/Brendonovich/prisma-client-rust"
 tag = "0.6.11"
 default-features = false
 features = ["postgresql"]
-
-# [profile.release]
-# opt-level = 1 # prisma client dep does not build on 1.74 at higher opt levels
