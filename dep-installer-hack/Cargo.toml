@@ -10,5 +10,5 @@ publish = false
 [workspace]
 
 [dependencies]
-shuttle-runtime = "0.36.0"
+shuttle-runtime = "0.37.0"
 tokio = "1.28.0"
