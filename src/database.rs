@@ -59,7 +59,7 @@ pub trait WallaceDBClient {
 
 impl WallaceDBClient for &mut PgConnection {
     async fn upsert_guild(self, id: u64) -> Result<()> {
-        sqlx::query("INSERT INTO guild VALUES ($1) ON CONFLICT DO NOTHING")
+        sqlx::query("INSERT INTO guild (id) VALUES ($1) ON CONFLICT DO NOTHING")
             .bind(id as i64)
             .execute(self)
             .await
@@ -130,7 +130,7 @@ impl WallaceDBClient for &mut PgConnection {
             .map_err(|q| log_error(q, "Failed to create object"))
     }
     async fn upsert_user(self, id: u64) -> Result<()> {
-        sqlx::query(r#"INSERT INTO "user" VALUES ($1) ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO "user" (id) VALUES ($1) ON CONFLICT DO NOTHING"#)
             .bind(id as i64)
             .execute(self)
             .await
@@ -168,7 +168,7 @@ impl WallaceDBClient for &mut PgConnection {
     ) -> Result<()> {
         let conn = self.acquire().await?;
         conn.upsert_user(user_id).await?;
-        sqlx::query("INSERT INTO lol_account VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO lol_account (server, summoner, user_id) VALUES ($1, $2, $3)")
             .bind(server)
             .bind(summoner)
             .bind(user_id as i64)
@@ -196,7 +196,7 @@ impl WallaceDBClient for &mut PgConnection {
     async fn create_bank_account(self, user_id: u64) -> Result<()> {
         let conn = self.acquire().await?;
         conn.upsert_user(user_id).await?;
-        sqlx::query("INSERT INTO bank_account VALUES ($1) ON CONFLICT DO NOTHING")
+        sqlx::query("INSERT INTO bank_account (user_id) VALUES ($1) ON CONFLICT DO NOTHING")
             .bind(user_id as i64)
             .execute(&mut *conn)
             .await
@@ -286,7 +286,7 @@ impl WallaceDBClient for &mut PgConnection {
     ) -> Result<()> {
         let conn = self.acquire().await?;
         conn.upsert_channel(channel_id).await?;
-        sqlx::query("INSERT INTO task VALUES ($1, $2, $3, $4)")
+        sqlx::query("INSERT INTO task (cron, cmd, arg, channel_id) VALUES ($1, $2, $3, $4)")
             .bind(cron)
             .bind(cmd)
             .bind(arg)

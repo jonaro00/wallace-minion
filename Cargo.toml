@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.12.3"
+version = "0.12.4"
 edition = "2021"
 
 [workspace]
@@ -32,11 +32,11 @@ serenity = { version = "0.12.0", default-features = false, features = [
     "standard_framework",
     "voice",
 ] }
-shuttle-runtime = "0.38.0"
-shuttle-secrets = "0.38.0"
+shuttle-runtime = "0.39.0"
+shuttle-secrets = "0.39.0"
 songbird = { version = "0.4.0", features = ["builtin-queue"] }
 sqlx = { version = "0.7.3", default-features = false, features = ["macros", "postgres", "runtime-tokio", "tls-rustls"] }
-strum = { version = "0.25", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
 symphonia = { version = "0.5.3", default-features = false, features = ["mp3"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 tracing = "0.1"

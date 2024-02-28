@@ -1,8 +1,9 @@
 use async_openai::types::{
-    ChatChoice, ChatCompletionFunctions, ChatCompletionRequestAssistantMessageArgs,
-    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
-    CreateModerationRequestArgs, Image, ImageSize, ResponseFormat, TextModerationModel,
+    ChatChoice, ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
+    ChatCompletionToolArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
+    CreateModerationRequestArgs, FunctionObjectArgs, Image, ImageSize, ResponseFormat,
+    TextModerationModel,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -128,30 +129,42 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         .into();
     v.push(user_msg.clone());
     let request = CreateChatCompletionRequestArgs::default()
-        .model("gpt-4")
+        .model("gpt-4-turbo-preview")
         .messages(v)
-        .functions(vec![
-            ChatCompletionFunctions {
-                name: "nine_plus_ten".into(),
-                description: Some("Get the answer to the equation `9 + 10`".into()),
-                parameters: serde_json::json!({"type": "object", "properties": {}}),
-            },
-            ChatCompletionFunctions {
-                name: "random_number".into(),
-                description: Some("Get a random integer between `number1` and `number2` inclusive. For example, arguments 1 and 6 would simulate a dice roll".into()),
-                parameters: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "number1": {
-                            "type": "number"
-                        },
-                        "number2": {
-                            "type": "number"
-                        }
-                    },
-                    "required": ["number1", "number2"]
-                }),
-            },
+        .tools(vec![
+            ChatCompletionToolArgs::default()
+                .function(
+                    FunctionObjectArgs::default()
+                        .name("nine_plus_ten")
+                        .description("Get the answer to the equation `9 + 10`")
+                        .parameters(serde_json::json!({"type": "object", "properties": {}}))
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .unwrap(),
+            ChatCompletionToolArgs::default()
+                .function(
+                    FunctionObjectArgs::default()
+                        .name("random_number")
+                        .description("Get a random integer between `number1` and `number2` inclusive. For example, arguments 1 and 6 would simulate a dice roll")
+                        .parameters(serde_json::json!({
+                            "type": "object",
+                            "properties": {
+                                "number1": {
+                                    "type": "number"
+                                },
+                                "number2": {
+                                    "type": "number"
+                                }
+                            },
+                            "required": ["number1", "number2"]
+                        }))
+                        .build()
+                        .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
         ])
         .n(1)
         .build()
