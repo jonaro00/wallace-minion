@@ -1,5 +1,4 @@
 pub mod cool_text;
-pub mod polly;
 pub mod riot_api;
 pub mod seven_tv;
 
@@ -9,15 +8,13 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
     builder::{CreateEmbed, CreateEmbedAuthor, CreateMessage, EditGuild, EditMember},
     client::Context,
-    framework::standard::{Args, CommandResult},
+    framework::standard::CommandResult,
     model::prelude::{Guild, Message, Timestamp, UserId},
 };
 
 use cool_text::{to_cool_text, Font};
 
 use crate::{database::WallaceDBClient, discord::get_db_handler};
-
-use self::polly::PollyLanguage;
 
 pub async fn set_server_name<'a>(
     ctx: &Context,
@@ -199,15 +196,5 @@ pub async fn do_payment(ctx: &Context, msg: &Message, amount: i64) -> CommandRes
             )
             .await;
         Ok(())
-    }
-}
-
-pub fn get_lang_flag(args: &mut Args) -> Option<PollyLanguage> {
-    let a = args.current()?.to_owned();
-    if a.starts_with('-') {
-        args.advance();
-        a.strip_prefix('-').unwrap().parse::<PollyLanguage>().ok()
-    } else {
-        None
     }
 }

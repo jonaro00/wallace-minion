@@ -2,8 +2,8 @@ use async_openai::types::{
     ChatChoice, ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
     ChatCompletionToolArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
-    CreateModerationRequestArgs, FunctionObjectArgs, Image, ImageSize, ResponseFormat,
-    TextModerationModel,
+    CreateModerationRequestArgs, CreateSpeechRequestArgs, FunctionObjectArgs, Image, ImageSize,
+    ResponseFormat, SpeechModel, TextModerationModel, Voice,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -26,14 +26,11 @@ use tracing::info;
 
 use crate::{
     discord::{get_openai, get_openai_convos, get_songbird},
-    services::{
-        do_payment, get_lang_flag,
-        polly::{to_mp3, PollyLanguage},
-    },
+    services::do_payment,
 };
 
 #[group("AI and Voice")]
-#[commands(ai, dalle, say, tts, languages)]
+#[commands(ai, dalle, say, tts)]
 struct AIVoice;
 
 const WALLACE_PERSONALITY: &str = "
@@ -84,8 +81,7 @@ impl WallaceAIConv {
 #[sub_commands(reset)]
 #[description("Ask me anything! ChatGPT will answer for me tho...")]
 #[usage("<text>")]
-async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let lang = get_lang_flag(&mut args);
+async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let input = args.rest();
     let typing = ctx.http.start_typing(msg.channel_id);
 
@@ -230,7 +226,7 @@ async fn ai(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     conv.add(user_msg, assistant_msg);
     drop(conv);
 
-    let _ = play_text_voice(ctx, msg, reply.as_str(), lang).await;
+    let _ = play_text_voice(ctx, msg, reply.as_str()).await;
 
     Ok(())
 }
@@ -315,12 +311,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     Ok(())
 }
 
-pub async fn play_text_voice(
-    ctx: &Context,
-    msg: &Message,
-    text: &str,
-    lang: Option<PollyLanguage>,
-) -> CommandResult {
+pub async fn play_text_voice(ctx: &Context, msg: &Message, text: &str) -> CommandResult {
     let guild = match msg.guild(&ctx.cache) {
         None => {
             info!("Skipping voice. Not in a guild.");
@@ -363,7 +354,7 @@ pub async fn play_text_voice(
         call
     };
 
-    let sound_data = to_mp3(ctx, text, lang).await?;
+    let sound_data = to_mp3(ctx, text).await?;
     let input = Box::new(std::io::Cursor::new(sound_data));
     let hint = Some(Hint::new().with_extension("mp3").to_owned());
     let wrapped_audio = LiveInput::Raw(AudioStream { input, hint });
@@ -401,21 +392,35 @@ impl VoiceEventHandler for UserDisconnectNotifier {
     }
 }
 
+pub async fn to_mp3(ctx: &Context, text: impl Into<String>) -> CommandResult<Vec<u8>> {
+    Ok(get_openai(ctx)
+        .await
+        .audio()
+        .speech(
+            CreateSpeechRequestArgs::default()
+                .input(text)
+                .voice(Voice::Onyx)
+                .model(SpeechModel::Tts1)
+                .build()
+                .unwrap(),
+        )
+        .await?
+        .bytes
+        .to_vec())
+}
+
 #[command]
 #[min_args(1)]
 #[only_in(guilds)]
-async fn say(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let lang = get_lang_flag(&mut args);
-    play_text_voice(ctx, msg, args.rest(), lang).await
+async fn say(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    play_text_voice(ctx, msg, args.rest()).await
 }
 
 #[command]
 #[description("Produce an mp3 with TTS")]
-async fn tts(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let lang = get_lang_flag(&mut args);
+async fn tts(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let text = args.rest();
-
-    let mp3 = to_mp3(ctx, text, lang).await?;
+    let mp3 = to_mp3(ctx, text).await?;
 
     msg.channel_id
         .send_files(
@@ -427,15 +432,5 @@ async fn tts(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             CreateMessage::new(),
         )
         .await?;
-    Ok(())
-}
-
-#[command]
-#[description("Show all voice languages supported and their identifier")]
-async fn languages(ctx: &Context, msg: &Message) -> CommandResult {
-    let _ = msg
-        .channel_id
-        .say(ctx, PollyLanguage::to_list_string())
-        .await;
     Ok(())
 }
