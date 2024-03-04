@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use aws_config::BehaviorVersion;
 use shuttle_secrets::{SecretStore, Secrets};
 
 use discord::build_bot;
@@ -32,27 +31,6 @@ async fn serenity(
     let openai_token = secret_store
         .get("OPENAI_TOKEN")
         .expect("OpenAI token missing! (env variable `OPENAI_TOKEN`)");
-    let aws_key_id = secret_store
-        .get("AWS_ACCESS_KEY_ID")
-        .expect("AWS Access Key Id missing! (env variable `AWS_ACCESS_KEY_ID`)");
-    let aws_secret = secret_store
-        .get("AWS_SECRET_ACCESS_KEY")
-        .expect("AWS Secret Access Key missing! (env variable `AWS_SECRET_ACCESS_KEY`)");
-    let aws_region = secret_store
-        .get("AWS_REGION")
-        .expect("AWS Region missing! (env variable `AWS_REGION`)");
-
-    let aws_config = aws_config::defaults(BehaviorVersion::v2023_11_09())
-        .credentials_provider(aws_credential_types::Credentials::new(
-            aws_key_id,
-            aws_secret,
-            None,
-            None,
-            "what is this string supposed to do?",
-        ))
-        .region(aws_types::region::Region::new(aws_region))
-        .load()
-        .await;
 
     let client = build_bot(
         discord_token,
@@ -60,7 +38,6 @@ async fn serenity(
         riot_token_tft,
         db_url,
         openai_token,
-        aws_config,
     )
     .await;
 

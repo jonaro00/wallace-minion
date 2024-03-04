@@ -8,8 +8,6 @@ use std::{
 use anyhow::anyhow;
 use async_openai::{config::OpenAIConfig, Client as OpenAIClient};
 use async_trait::async_trait;
-use aws_sdk_comprehend::Client as ComprehendClient;
-use aws_sdk_polly::Client as PollyClient;
 use chrono::Utc;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serenity::{
@@ -57,7 +55,6 @@ pub async fn build_bot(
     riot_token_tft: String,
     db_url: String,
     openai_token: String,
-    aws_config: aws_types::SdkConfig,
 ) -> DiscordClient {
     WALLACE_VERSION.get_or_init(|| {
         format!(
@@ -129,9 +126,6 @@ pub async fn build_bot(
         .expect("Database connection failed.");
     info!("Connected to database!");
 
-    let polly_client = PollyClient::new(&aws_config);
-    let comprehend_client = ComprehendClient::new(&aws_config);
-
     // Insert shared data
     {
         // Open the data lock in write mode, so that entries can be inserted.
@@ -146,11 +140,9 @@ pub async fn build_bot(
             OpenAIConfig::new().with_api_key(openai_token),
         )));
         data.insert::<WallaceOpenAIConvos>(Default::default());
-        data.insert::<WallacePolly>(Arc::new(polly_client));
         let (tx, rx) = tokio::sync::mpsc::channel::<()>(1);
         data.insert::<TaskSignal>(Arc::new(tx));
         data.insert::<TaskSignalRx>(rx);
-        data.insert::<WallaceComprehend>(Arc::new(comprehend_client));
     } // Release lock
 
     client
@@ -222,33 +214,6 @@ pub async fn get_openai_convos(ctx: &Context) -> TWallaceOpenAIConvos {
         .read()
         .await
         .get::<WallaceOpenAIConvos>()
-        .expect("type in typemap")
-        .clone()
-}
-
-struct WallacePolly;
-type TWallacePolly = Arc<PollyClient>;
-impl TypeMapKey for WallacePolly {
-    type Value = TWallacePolly;
-}
-pub async fn get_polly(ctx: &Context) -> TWallacePolly {
-    ctx.data
-        .read()
-        .await
-        .get::<WallacePolly>()
-        .expect("type in typemap")
-        .clone()
-}
-struct WallaceComprehend;
-type TWallaceComprehend = Arc<ComprehendClient>;
-impl TypeMapKey for WallaceComprehend {
-    type Value = TWallaceComprehend;
-}
-pub async fn get_comprehend(ctx: &Context) -> TWallaceComprehend {
-    ctx.data
-        .read()
-        .await
-        .get::<WallaceComprehend>()
         .expect("type in typemap")
         .clone()
 }
