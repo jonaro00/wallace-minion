@@ -16,7 +16,7 @@ If there is enough interest, I might make a demo server where you can try it out
 - Bot hosted on [Shuttle](https://www.shuttle.rs/) 🚀
 - Postgres database in [Neon](https://neon.tech/) 🐘 managed with [Prisma](https://prisma.brendonovich.dev/) 🔼 queried with [sqlx](https://github.com/launchbadge/sqlx)
 - Discord framework [Serenity](https://github.com/serenity-rs/serenity) 🏞 + [Songbird](https://github.com/serenity-rs/songbird) 🐦
-- APIs: [OpenAI](https://platform.openai.com/docs/api-reference) 🤖, [AWS](https://aws.amazon.com/) 🛤, [7TV](https://7tv.app/) 🐸, [Riot](https://developer.riotgames.com/) 👊
+- APIs: [OpenAI](https://platform.openai.com/docs/api-reference) 🤖, [7TV](https://7tv.app/) 🐸, [Riot](https://developer.riotgames.com/) 👊
 
 ## Features
 
@@ -37,9 +37,9 @@ https://user-images.githubusercontent.com/54029719/228099216-570ac72e-ee16-48ec-
 
 ### ✨ Plain TTS in all supported languages 🌞
 
-`!say` reads out any text in Voice. Language is auto detected, and can be modified.
+`!say` reads out any text in Voice.
 
-`!tts` does the same thing, but produces an mp3 as output instead.
+`!tts` produces an ogg file as output instead.
 
 ### ✨ DALL-E image generation 🌆
 

@@ -3,7 +3,7 @@ use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
     ChatCompletionToolArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
     CreateModerationRequestArgs, CreateSpeechRequestArgs, FunctionObjectArgs, Image, ImageSize,
-    ResponseFormat, SpeechModel, TextModerationModel, Voice,
+    ResponseFormat, SpeechModel, SpeechResponseFormat, TextModerationModel, Voice,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -178,7 +178,7 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         message,
         ..
     } = response.choices.get(0).ok_or("No choices returned")?;
-    let reply = if *finish_reason == Some(async_openai::types::FinishReason::FunctionCall) {
+    let reply = if *finish_reason == Some(async_openai::types::FinishReason::ToolCalls) {
         let Some(f) = message
             .tool_calls
             .as_ref()
@@ -354,9 +354,9 @@ pub async fn play_text_voice(ctx: &Context, msg: &Message, text: &str) -> Comman
         call
     };
 
-    let sound_data = to_mp3(ctx, text).await?;
-    let input = Box::new(std::io::Cursor::new(sound_data));
-    let hint = Some(Hint::new().with_extension("mp3").to_owned());
+    let ogg = to_ogg(ctx, text).await?;
+    let input = Box::new(std::io::Cursor::new(ogg));
+    let hint = Some(Hint::new().with_extension("ogg").to_owned());
     let wrapped_audio = LiveInput::Raw(AudioStream { input, hint });
     let track_handle = {
         call_lock
@@ -392,7 +392,7 @@ impl VoiceEventHandler for UserDisconnectNotifier {
     }
 }
 
-pub async fn to_mp3(ctx: &Context, text: impl Into<String>) -> CommandResult<Vec<u8>> {
+pub async fn to_ogg(ctx: &Context, text: impl Into<String>) -> CommandResult<Vec<u8>> {
     Ok(get_openai(ctx)
         .await
         .audio()
@@ -401,6 +401,7 @@ pub async fn to_mp3(ctx: &Context, text: impl Into<String>) -> CommandResult<Vec
                 .input(text)
                 .voice(Voice::Onyx)
                 .model(SpeechModel::Tts1)
+                .response_format(SpeechResponseFormat::Opus)
                 .build()
                 .unwrap(),
         )
@@ -417,17 +418,17 @@ async fn say(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 }
 
 #[command]
-#[description("Produce an mp3 with TTS")]
+#[description("Produce an ogg file with TTS")]
 async fn tts(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let text = args.rest();
-    let mp3 = to_mp3(ctx, text).await?;
+    let ogg = to_ogg(ctx, text).await?;
 
     msg.channel_id
         .send_files(
             ctx,
             [CreateAttachment::bytes(
-                mp3.as_slice(),
-                format!("{}.mp3", msg.id).as_str(),
+                ogg.as_slice(),
+                format!("{}.ogg", msg.id).as_str(),
             )],
             CreateMessage::new(),
         )

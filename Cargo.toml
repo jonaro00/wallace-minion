@@ -32,7 +32,7 @@ shuttle-secrets = "0.40.0"
 songbird = { version = "0.4.0", features = ["builtin-queue"] }
 sqlx = { version = "0.7.3", default-features = false, features = ["macros", "postgres", "runtime-tokio", "tls-rustls"] }
 strum = { version = "0.26", features = ["derive"] }
-symphonia = { version = "0.5.3", default-features = false, features = ["mp3"] }
+symphonia = { version = "0.5.3", default-features = false, features = ["ogg"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
 
