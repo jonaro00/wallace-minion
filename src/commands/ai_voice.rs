@@ -2,8 +2,9 @@ use async_openai::types::{
     ChatChoice, ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
     ChatCompletionToolArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
-    CreateModerationRequestArgs, CreateSpeechRequestArgs, FunctionObjectArgs, Image, ImageSize,
-    ResponseFormat, SpeechModel, SpeechResponseFormat, TextModerationModel, Voice,
+    CreateModerationRequestArgs, CreateSpeechRequestArgs, FunctionObjectArgs, Image, ImageModel,
+    ImageSize, ImageStyle, ResponseFormat, SpeechModel, SpeechResponseFormat, TextModerationModel,
+    Voice,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -246,10 +247,10 @@ async fn reset(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-#[description("Make a DALL-E image. Costs 1 𝓚𝓪𝓹𝓼𝔂𝓵.")]
+#[description("Make a DALL-E image. Costs 10 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻.")]
 #[usage("<text>")]
 async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    if do_payment(ctx, msg, 1).await.is_err() {
+    if do_payment(ctx, msg, 10).await.is_err() {
         return Ok(());
     }
 
@@ -278,10 +279,12 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     // chat completion request
     let request = CreateImageRequestArgs::default()
+        .model(ImageModel::DallE3)
         .prompt(input)
         .n(1)
         .response_format(ResponseFormat::B64Json)
-        .size(ImageSize::S512x512)
+        .size(ImageSize::S1024x1024)
+        .style(ImageStyle::Vivid)
         .user("async-openai")
         .build()
         .unwrap();
