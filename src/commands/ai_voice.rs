@@ -282,27 +282,25 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                                 serde_json::from_str(&call.function.arguments)
                                     .expect("valid json arguments");
                             let amount = args.amount;
-                            if amount > 100 || amount < 1 {
+                            if !(1..=100).contains(&amount) {
                                 "Invalid amount".into()
+                            } else if db.add_bank_account_balance(uid, amount).await.is_ok() {
+                                let _ = msg
+                                    .channel_id
+                                    .send_message(
+                                        ctx,
+                                        CreateMessage::new().add_embed(
+                                            CreateEmbed::new()
+                                                .author(
+                                                    CreateEmbedAuthor::new(format!("Wallace gave you {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻."))
+                                                        .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif"),
+                                                ),
+                                        ),
+                                    )
+                                    .await;
+                                "Successfully added balance".into()
                             } else {
-                                if db.add_bank_account_balance(uid, amount).await.is_ok() {
-                                    let _ = msg
-                                        .channel_id
-                                        .send_message(
-                                            ctx,
-                                            CreateMessage::new().add_embed(
-                                                CreateEmbed::new()
-                                                    .author(
-                                                        CreateEmbedAuthor::new(format!("Wallace gave you {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻."))
-                                                            .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif"),
-                                                    ),
-                                            ),
-                                        )
-                                        .await;
-                                    "Successfully added balance".into()
-                                } else {
-                                    "Failed to add balance".into()
-                                }
+                                "Failed to add balance".into()
                             }
                         }
                         _ => "unknown function called".to_owned(),

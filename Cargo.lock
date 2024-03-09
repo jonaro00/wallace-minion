@@ -414,9 +414,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.15.3"
+version = "3.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea184aa71bb362a1157c896979544cc23974e08fd265f29ea96b59f0b4a555b"
+checksum = "7ff69b9dd49fd426c69a0db9fc04dd934cdb6645ff000864d98f7e2af8830eaa"
 
 [[package]]
 name = "bytecount"
@@ -475,9 +475,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.89"
+version = "1.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0ba8f7aaa012f30d5b2861462f6708eccd49c3c39863fe083a308035f63d723"
+checksum = "8cd6604a82acf3039f1144f54b8eb34e91ffba622051189e71b781822d5ee1f5"
 
 [[package]]
 name = "cfg-if"
@@ -493,9 +493,9 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
-version = "0.4.34"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bc015644b92d5890fab7489e49d21f879d5c990186827d42ec511919404f38b"
+checksum = "8eaf5903dcbc0a39312feb77df2ff4c76387d591b9fc7b04a238dcf8bb62639a"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -1346,6 +1346,18 @@ name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "graphql-parser"
@@ -2544,18 +2556,18 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "1.1.4"
+version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0302c4a0442c456bd56f841aee5c3bfd17967563f6fadc9ceb9f9c23cf3807e0"
+checksum = "b6bf43b791c5b9e34c3d182969b4abb522f9343702850a2e57f460d00d09b4b3"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "1.1.4"
+version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "266c042b60c9c76b8d53061e52b2e0d1116abc57cefc8c5cd671619a56ac3690"
+checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3218,9 +3230,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.24"
+version = "0.11.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6920094eb85afde5e4a138be3f2de8bbdf28000f0029e72c45025a56b042251"
+checksum = "0eea5a9eb898d3783f17c6407670e3592fd174cb81a10e51d4c37f49450b9946"
 dependencies = [
  "async-compression",
  "base64 0.21.7",
@@ -3322,11 +3334,12 @@ dependencies = [
 
 [[package]]
 name = "riven"
-version = "2.33.1"
+version = "2.34.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b46dc87e2de847faac4ce3d064afbff8351dda10f8c3f23e6b58d4364a1b7db"
+checksum = "9fb04a1aea7c4449b237564a326a60625344d3eebcd12f2188ea8fda676fb9f5"
 dependencies = [
- "lazy_static",
+ "futures",
+ "gloo-timers",
  "log",
  "num_enum",
  "parking_lot 0.12.1",
@@ -3338,6 +3351,7 @@ dependencies = [
  "strum 0.20.0",
  "strum_macros 0.20.1",
  "tokio",
+ "web-time 1.1.0",
 ]
 
 [[package]]
@@ -3805,9 +3819,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-codegen"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84756b15f4f51a0edd060fe59203ce5d6b37796204a4d614135f266f97141d85"
+checksum = "4b74556837ddca4b2939a3c0cc770ec4edebebc594ad4d87973e283cc2b06cb9"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -3817,9 +3831,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-common"
-version = "0.40.2"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4af50755ec20f317a5f6429385ead196a77c678fb5a726a9bae98ab1c8a600f6"
+checksum = "73ba3a5682794470b5bf045c4a36fd42c86bbbe1040edc1855cb68272df69e91"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3832,7 +3846,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "strum 0.25.0",
+ "strum 0.26.1",
  "tower",
  "tracing",
  "tracing-opentelemetry 0.22.0",
@@ -3844,9 +3858,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-proto"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a26c79d064d7b24fc12cb4035d3baecac99e16f28a384c7359c36253f3278bc4"
+checksum = "3d096928c1c465388dd23fb8ec8842bd41c80105041ce81eb975917778cd3a70"
 dependencies = [
  "futures-core",
  "prost",
@@ -3857,9 +3871,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-runtime"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75e4df6264bcdf63c6b90180cd644a03e9b28fdb955b40cb650176dcc0ead0b"
+checksum = "64474de5309434dfee5762c1858f0dde590b73d5af190cace6fc31d81fa2d481"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3882,9 +3896,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-secrets"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "486caa037d33e0b40cc664d52d0461c9bfbe56d5d344b7706bdd03c806b11d09"
+checksum = "4d9d394205acb672e5b8912294603341e9d8f3eae9a194e9acf511c4c0538b0c"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -3893,9 +3907,9 @@ dependencies = [
 
 [[package]]
 name = "shuttle-service"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7ebd14ea503e12caaf1bb12587fe579fa1087a6a6b0c73c2c53331acb538c8c"
+checksum = "e2a98f52c7fb8a19f8089cdee5ffd5290617f6d322f06ee292d0a2ed75a9094a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4290,15 +4304,6 @@ checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
 
 [[package]]
 name = "strum"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
-dependencies = [
- "strum_macros 0.25.3",
-]
-
-[[package]]
-name = "strum"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "723b93e8addf9aa965ebe2d11da6d7540fa2283fcea14b3371ff055f7ba13f5f"
@@ -4329,19 +4334,6 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.25.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.52",
 ]
 
 [[package]]
@@ -4464,20 +4456,20 @@ dependencies = [
 
 [[package]]
 name = "system-configuration"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3a3adc5c275d719af8cb4272ea1c4a6d668a777f37e115f6d11ddbc1c8e0e7"
+checksum = "658bc6ee10a9b4fcf576e9b0819d95ec16f4d2c02d39fd83ac1c8789785c4a42"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.4.2",
  "core-foundation",
  "system-configuration-sys",
 ]
 
 [[package]]
 name = "system-configuration-sys"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75fb188eb626b924683e3b95e3a48e63551fcfb51949de2f06a9d91dbee93c9"
+checksum = "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -4933,7 +4925,7 @@ dependencies = [
  "tracing-core",
  "tracing-log 0.2.0",
  "tracing-subscriber",
- "web-time",
+ "web-time 0.2.4",
 ]
 
 [[package]]
@@ -5326,7 +5318,7 @@ dependencies = [
 
 [[package]]
 name = "wallace-minion"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -5477,6 +5469,16 @@ name = "web-time"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa30049b1c872b72c89866d458eae9f20380ab280ffd1b1e18df2d3e2d98cfe0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "web-time"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

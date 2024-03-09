@@ -58,7 +58,7 @@ pub async fn bonk_user(ctx: &Context, msg: &Message, uid: u64, duration: u32) ->
             UserId::new(uid),
             EditMember::new().disable_communication_until(
                 Timestamp::now()
-                    .checked_add_signed(Duration::seconds(duration as i64))
+                    .checked_add_signed(Duration::try_seconds(duration as i64).unwrap())
                     .expect("Failed to add date")
                     .to_rfc3339(),
             ),

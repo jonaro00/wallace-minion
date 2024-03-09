@@ -49,7 +49,7 @@ impl RiotAPIClients {
         puuid: &str,
     ) -> Result<(usize, i64), RiotApiError> {
         let start_time = Utc::now()
-            .checked_sub_signed(Duration::days(7))
+            .checked_sub_signed(Duration::try_days(7).unwrap())
             .unwrap()
             .timestamp();
         let mut secs = 0;
@@ -84,7 +84,7 @@ impl RiotAPIClients {
         puuid: &str,
     ) -> Result<(usize, i64), RiotApiError> {
         let start_time = Utc::now()
-            .checked_sub_signed(Duration::days(7))
+            .checked_sub_signed(Duration::try_days(7).unwrap())
             .unwrap()
             .timestamp();
         let mut secs = 0;
