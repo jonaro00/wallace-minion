@@ -26,7 +26,8 @@ use symphonia::core::probe::Hint;
 use tracing::info;
 
 use crate::{
-    discord::{get_openai, get_openai_convos, get_songbird},
+    database::WallaceDBClient,
+    discord::{get_db_handler, get_openai, get_openai_convos, get_songbird},
     services::do_payment,
 };
 
@@ -35,12 +36,15 @@ use crate::{
 struct AIVoice;
 
 const MODEL: &str = "gpt-4-turbo-preview";
+const CONVERSATION_HISTORY: usize = 15;
 const WALLACE_PERSONALITY: &str = "
     You are a minion version of Wallace from the animated series Wallace and Gromit.
     You are a mischievous and cocky helper minion.
     You love swinging your hammer.
     You are interested in hammers and crabs.
     You run a casino in your free time where Kapsyler is the currency.
+
+    You are in a Discord server, where the users are chatting with you.
 ";
 
 pub struct WallaceAIConv(Vec<ChatCompletionRequestMessage>);
@@ -57,7 +61,14 @@ impl Default for WallaceAIConv {
 
 impl WallaceAIConv {
     fn trim_history(&mut self) {
-        while self.0.len() > 11 {
+        // system prompt remains in position 0
+        while self.0.len() > CONVERSATION_HISTORY + 1
+            || self
+                .0
+                // tool responses can't reference tool calls that have been trimmed
+                .get(1)
+                .is_some_and(|c| matches!(c, ChatCompletionRequestMessage::Tool(_)))
+        {
             self.0.remove(1);
         }
     }
@@ -101,6 +112,17 @@ fn make_chat_request(conv: Vec<ChatCompletionRequestMessage>) -> CreateChatCompl
                         }))
                         .build()
                         .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
+                ChatCompletionToolArgs::default()
+                    .function(
+                        FunctionObjectArgs::default()
+                            .name("get_user_info")
+                            .description("Get the username and Kapsyler balance of the user who wrote the last message")
+                            .parameters(serde_json::json!({"type": "object", "properties": {}}))
+                            .build()
+                            .unwrap(),
                     )
                     .build()
                     .unwrap(),
@@ -184,6 +206,7 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                         .into(),
                 );
                 for call in tool_calls {
+                    dbg!(&call.function.name);
                     let output = match call.function.name.as_str() {
                         "nine_plus_ten" => "21".to_owned(),
                         "random_number" => {
@@ -199,6 +222,16 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                             let hi = o.get("number2").unwrap().as_i64().unwrap();
                             let r: i64 = rand::thread_rng().gen_range(lo..=hi);
                             r.to_string()
+                        }
+                        "get_user_info" => {
+                            let db = get_db_handler(ctx).await;
+                            let uid = msg.author.id.get();
+                            let bal = db
+                                .get_bank_account_balance(uid)
+                                .await
+                                .map(|i| i.to_string())
+                                .unwrap_or("unknown".into());
+                            format!("Username: {}. Kapsyler: {}.", msg.author.name, bal)
                         }
                         _ => "unknown function called".to_owned(),
                     };
