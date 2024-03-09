@@ -1,10 +1,10 @@
 use async_openai::types::{
     ChatChoice, ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
-    ChatCompletionToolArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs,
-    CreateModerationRequestArgs, CreateSpeechRequestArgs, FunctionObjectArgs, Image, ImageModel,
-    ImageSize, ImageStyle, ResponseFormat, SpeechModel, SpeechResponseFormat, TextModerationModel,
-    Voice,
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs,
+    ChatCompletionRequestUserMessageArgs, ChatCompletionToolArgs, CreateChatCompletionRequest,
+    CreateChatCompletionRequestArgs, CreateImageRequestArgs, CreateModerationRequestArgs,
+    CreateSpeechRequestArgs, FinishReason, FunctionObjectArgs, Image, ImageModel, ImageSize,
+    ImageStyle, ResponseFormat, SpeechModel, SpeechResponseFormat, TextModerationModel, Voice,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -34,15 +34,17 @@ use crate::{
 #[commands(ai, dalle, say, tts)]
 struct AIVoice;
 
+const MODEL: &str = "gpt-4-turbo-preview";
 const WALLACE_PERSONALITY: &str = "
     You are a minion version of Wallace from the animated series Wallace and Gromit.
     You are a mischievous and cocky helper minion.
     You love swinging your hammer.
     You are interested in hammers and crabs.
     You run a casino in your free time where Kapsyler is the currency.
-    You sometimes add references to your personality in your responses to messages.
 ";
+
 pub struct WallaceAIConv(Vec<ChatCompletionRequestMessage>);
+
 impl Default for WallaceAIConv {
     fn default() -> Self {
         Self(vec![ChatCompletionRequestSystemMessageArgs::default()
@@ -52,23 +54,8 @@ impl Default for WallaceAIConv {
             .into()])
     }
 }
+
 impl WallaceAIConv {
-    fn add(&mut self, prompt: ChatCompletionRequestMessage, reply: ChatCompletionRequestMessage) {
-        self.0.push(prompt);
-        self.0.push(reply);
-    }
-    fn add_fn_call(
-        &mut self,
-        prompt: ChatCompletionRequestMessage,
-        fn_call: ChatCompletionRequestMessage,
-        fn_result: ChatCompletionRequestMessage,
-        reply: ChatCompletionRequestMessage,
-    ) {
-        self.0.push(prompt);
-        self.0.push(fn_call);
-        self.0.push(fn_result);
-        self.0.push(reply);
-    }
     fn trim_history(&mut self) {
         while self.0.len() > 11 {
             self.0.remove(1);
@@ -78,6 +65,51 @@ impl WallaceAIConv {
         *self = Self::default();
     }
 }
+
+fn make_chat_request(conv: Vec<ChatCompletionRequestMessage>) -> CreateChatCompletionRequest {
+    CreateChatCompletionRequestArgs::default()
+        .model(MODEL)
+        .messages(conv)
+        .tools(vec![
+            ChatCompletionToolArgs::default()
+                .function(
+                    FunctionObjectArgs::default()
+                        .name("nine_plus_ten")
+                        .description("Get the answer to the equation `9 + 10`")
+                        .parameters(serde_json::json!({"type": "object", "properties": {}}))
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .unwrap(),
+            ChatCompletionToolArgs::default()
+                .function(
+                    FunctionObjectArgs::default()
+                        .name("random_number")
+                        .description("Get a random integer between `number1` and `number2` inclusive. For example, arguments 1 and 6 would simulate a dice roll")
+                        .parameters(serde_json::json!({
+                            "type": "object",
+                            "properties": {
+                                "number1": {
+                                    "type": "number"
+                                },
+                                "number2": {
+                                    "type": "number"
+                                }
+                            },
+                            "required": ["number1", "number2"]
+                        }))
+                        .build()
+                        .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
+        ])
+        .n(1)
+        .build()
+        .unwrap()
+}
+
 #[command]
 #[sub_commands(reset)]
 #[description("Ask me anything! ChatGPT will answer for me tho...")]
@@ -124,107 +156,89 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .build()
         .unwrap()
         .into();
-    v.push(user_msg.clone());
-    let request = CreateChatCompletionRequestArgs::default()
-        .model("gpt-4-turbo-preview")
-        .messages(v)
-        .tools(vec![
-            ChatCompletionToolArgs::default()
-                .function(
-                    FunctionObjectArgs::default()
-                        .name("nine_plus_ten")
-                        .description("Get the answer to the equation `9 + 10`")
-                        .parameters(serde_json::json!({"type": "object", "properties": {}}))
-                        .build()
-                        .unwrap(),
-                )
-                .build()
-                .unwrap(),
-            ChatCompletionToolArgs::default()
-                .function(
-                    FunctionObjectArgs::default()
-                        .name("random_number")
-                        .description("Get a random integer between `number1` and `number2` inclusive. For example, arguments 1 and 6 would simulate a dice roll")
-                        .parameters(serde_json::json!({
-                            "type": "object",
-                            "properties": {
-                                "number1": {
-                                    "type": "number"
-                                },
-                                "number2": {
-                                    "type": "number"
-                                }
-                            },
-                            "required": ["number1", "number2"]
-                        }))
-                        .build()
-                        .unwrap(),
-                    )
-                    .build()
-                    .unwrap(),
-        ])
-        .n(1)
-        .build()
-        .unwrap();
+    v.push(user_msg);
 
-    let response = client.chat().create(request).await?;
+    let reply = loop {
+        let request = make_chat_request(v.clone());
+        let response = client.chat().create(request).await?;
 
-    // // Debug
-    // let us = response.usage.unwrap();
-    // println!("tokens {} + {}", us.prompt_tokens, us.completion_tokens);
+        // // Debug
+        // let us = response.usage.unwrap();
+        // dbg!(us.prompt_tokens, us.completion_tokens);
 
-    typing.stop();
-    let ChatChoice {
-        finish_reason,
-        message,
-        ..
-    } = response.choices.get(0).ok_or("No choices returned")?;
-    let reply = if *finish_reason == Some(async_openai::types::FinishReason::ToolCalls) {
-        let Some(f) = message
-            .tool_calls
-            .as_ref()
-            .and_then(|v| v.get(0))
-            .map(|c| &c.function)
-        else {
-            return Err("couldn't parse response".into());
-        };
-        dbg!(&f.name, &f.arguments);
-        match f.name.as_str() {
-            "nine_plus_ten" => "21".to_owned(),
-            "random_number" => {
-                let x = f
-                    .arguments
-                    .parse::<serde_json::Value>()
-                    .expect("valid json arguments");
-                let serde_json::Value::Object(o) = x else {
-                    return Err("not an object".into());
+        let ChatChoice {
+            finish_reason,
+            message,
+            ..
+        } = response.choices.first().ok_or("No choices returned")?;
+        match finish_reason {
+            Some(FinishReason::ToolCalls) => {
+                let Some(tool_calls) = message.tool_calls.as_ref() else {
+                    return Err("couldn't parse tool call response".into());
                 };
-                let lo = o.get("number1").unwrap().as_i64().unwrap();
-                let hi = o.get("number2").unwrap().as_i64().unwrap();
-                let r: i64 = rand::thread_rng().gen_range(lo..=hi);
-                r.to_string()
+                v.push(
+                    ChatCompletionRequestAssistantMessageArgs::default()
+                        .tool_calls(tool_calls.clone())
+                        .build()
+                        .unwrap()
+                        .into(),
+                );
+                for call in tool_calls {
+                    let output = match call.function.name.as_str() {
+                        "nine_plus_ten" => "21".to_owned(),
+                        "random_number" => {
+                            let x = call
+                                .function
+                                .arguments
+                                .parse::<serde_json::Value>()
+                                .expect("valid json arguments");
+                            let serde_json::Value::Object(o) = x else {
+                                return Err("not an object".into());
+                            };
+                            let lo = o.get("number1").unwrap().as_i64().unwrap();
+                            let hi = o.get("number2").unwrap().as_i64().unwrap();
+                            let r: i64 = rand::thread_rng().gen_range(lo..=hi);
+                            r.to_string()
+                        }
+                        _ => "unknown function called".to_owned(),
+                    };
+                    v.push(
+                        ChatCompletionRequestToolMessageArgs::default()
+                            .content(output)
+                            .tool_call_id(call.id.clone())
+                            .build()
+                            .unwrap()
+                            .into(),
+                    );
+                }
+                continue;
             }
-            _ => "unknown function called".to_owned(),
+            Some(FinishReason::Stop) => {
+                let reply = message
+                    .content
+                    .as_ref()
+                    .ok_or("No message content")?
+                    .to_owned();
+                v.push(
+                    ChatCompletionRequestAssistantMessageArgs::default()
+                        .content(reply.clone())
+                        .build()
+                        .unwrap()
+                        .into(),
+                );
+                break reply;
+            }
+            _ => return Err("couldn't handle response type".into()),
         }
-    } else {
-        message
-            .content
-            .as_ref()
-            .ok_or("No message content")?
-            .to_owned()
     };
+    typing.stop();
     let reply2 = format!("`Wallace AI:`\n{reply}");
     let mut chars = reply2.chars().peekable();
     while chars.peek().is_some() {
         let s: String = chars.by_ref().take(2000).collect();
         msg.channel_id.say(ctx, s).await?;
     }
-    let assistant_msg = ChatCompletionRequestAssistantMessageArgs::default()
-        .content(reply.as_str())
-        .build()
-        .unwrap()
-        .into();
-    conv.add(user_msg, assistant_msg);
+    *conv = WallaceAIConv(v);
     drop(conv);
 
     let _ = play_text_voice(ctx, msg, reply.as_str()).await;
@@ -292,7 +306,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let response = client.images().create(request).await?;
 
     typing.stop();
-    let reply = match &**response.data.get(0).ok_or("No images returned")? {
+    let reply = match &**response.data.first().ok_or("No images returned")? {
         Image::Url { .. } => panic!("url response not used"),
         Image::B64Json { b64_json, .. } => {
             use base64::{engine::general_purpose, Engine as _};

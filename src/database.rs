@@ -240,7 +240,7 @@ impl WallaceDBClient for &mut PgConnection {
         positive(amount)?;
         let mut tr = self.begin().await?;
         (&mut tr).has_bank_account_balance(user_id, amount).await?;
-        let r = sqlx::query("UPDATE bank_account SET balance = balance - $1 WHERE user_id = $2")
+        sqlx::query("UPDATE bank_account SET balance = balance - $1 WHERE user_id = $2")
             .bind(amount)
             .bind(user_id as i64)
             .execute(&mut *tr)
@@ -248,7 +248,7 @@ impl WallaceDBClient for &mut PgConnection {
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to update balance"))?;
         tr.commit().await?;
-        Ok(r)
+        Ok(())
     }
     async fn transfer_bank_account_balance(
         self,
