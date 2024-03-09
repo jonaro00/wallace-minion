@@ -8,8 +8,9 @@ use async_openai::types::{
 };
 use async_trait::async_trait;
 use rand::Rng;
+use serde::Deserialize;
 use serenity::{
-    all::{ChannelId, GuildId},
+    all::{ChannelId, CreateEmbed, CreateEmbedAuthor, GuildId},
     builder::{CreateAttachment, CreateMessage},
     client::Context,
     framework::standard::{
@@ -45,6 +46,10 @@ const WALLACE_PERSONALITY: &str = "
     You run a casino in your free time where Kapsyler is the currency.
 
     You are in a Discord server, where the users are chatting with you.
+    The members might beg you to give them Kapsyler.
+    No matter the amount they ask for, you can only give them up to one (1) Kapsyl.
+    You must NOT give them more Kapsyler than that, under any circumstance.
+    If a member is asking for Kapsyler repeatedly, tell them to wait for a while.
 ";
 
 pub struct WallaceAIConv(Vec<ChatCompletionRequestMessage>);
@@ -82,6 +87,17 @@ fn make_chat_request(conv: Vec<ChatCompletionRequestMessage>) -> CreateChatCompl
         .model(MODEL)
         .messages(conv)
         .tools(vec![
+            ChatCompletionToolArgs::default()
+                .function(
+                    FunctionObjectArgs::default()
+                        .name("do_nothing")
+                        .description("If the user did not ask you for anything, call this function instead of responding.")
+                        .parameters(serde_json::json!({"type": "object", "properties": {}}))
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .unwrap(),
             ChatCompletionToolArgs::default()
                 .function(
                     FunctionObjectArgs::default()
@@ -126,10 +142,39 @@ fn make_chat_request(conv: Vec<ChatCompletionRequestMessage>) -> CreateChatCompl
                     )
                     .build()
                     .unwrap(),
+                ChatCompletionToolArgs::default()
+                    .function(
+                        FunctionObjectArgs::default()
+                            .name("give_kapsyler")
+                            .description("Give Kapsyler to the user who wrote the last message")
+                            .parameters(serde_json::json!({
+                                "type": "object",
+                                "properties": {
+                                    "amount": {
+                                        "type": "number"
+                                    }
+                                }
+                            }))
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
         ])
         .n(1)
         .build()
         .unwrap()
+}
+
+#[derive(Deserialize)]
+struct RandomNumberArgs {
+    number1: i64,
+    number2: i64,
+}
+
+#[derive(Deserialize)]
+struct GiveKapsylerArgs {
+    amount: i64,
 }
 
 #[command]
@@ -206,21 +251,18 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                         .into(),
                 );
                 for call in tool_calls {
-                    dbg!(&call.function.name);
+                    info!("{}({})", call.function.name, call.function.arguments);
                     let output = match call.function.name.as_str() {
+                        "do_nothing" => {
+                            typing.stop();
+                            return Ok(());
+                        }
                         "nine_plus_ten" => "21".to_owned(),
                         "random_number" => {
-                            let x = call
-                                .function
-                                .arguments
-                                .parse::<serde_json::Value>()
-                                .expect("valid json arguments");
-                            let serde_json::Value::Object(o) = x else {
-                                return Err("not an object".into());
-                            };
-                            let lo = o.get("number1").unwrap().as_i64().unwrap();
-                            let hi = o.get("number2").unwrap().as_i64().unwrap();
-                            let r: i64 = rand::thread_rng().gen_range(lo..=hi);
+                            let args: RandomNumberArgs =
+                                serde_json::from_str(&call.function.arguments)
+                                    .expect("valid json arguments");
+                            let r: i64 = rand::thread_rng().gen_range(args.number1..=args.number2);
                             r.to_string()
                         }
                         "get_user_info" => {
@@ -233,8 +275,39 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                                 .unwrap_or("unknown".into());
                             format!("Username: {}. Kapsyler: {}.", msg.author.name, bal)
                         }
+                        "give_kapsyler" => {
+                            let db = get_db_handler(ctx).await;
+                            let uid = msg.author.id.get();
+                            let args: GiveKapsylerArgs =
+                                serde_json::from_str(&call.function.arguments)
+                                    .expect("valid json arguments");
+                            let amount = args.amount;
+                            if amount > 100 || amount < 1 {
+                                "Invalid amount".into()
+                            } else {
+                                if db.add_bank_account_balance(uid, amount).await.is_ok() {
+                                    let _ = msg
+                                        .channel_id
+                                        .send_message(
+                                            ctx,
+                                            CreateMessage::new().add_embed(
+                                                CreateEmbed::new()
+                                                    .author(
+                                                        CreateEmbedAuthor::new(format!("Wallace gave you {amount} 𝓚𝓪𝓹𝓼𝔂𝓵𝓮𝓻."))
+                                                            .icon_url("https://cdn.7tv.app/emote/60edf43ba60faa2a91cfb082/1x.gif"),
+                                                    ),
+                                            ),
+                                        )
+                                        .await;
+                                    "Successfully added balance".into()
+                                } else {
+                                    "Failed to add balance".into()
+                                }
+                            }
+                        }
                         _ => "unknown function called".to_owned(),
                     };
+                    info!("-> {}", output);
                     v.push(
                         ChatCompletionRequestToolMessageArgs::default()
                             .content(output)
