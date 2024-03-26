@@ -90,17 +90,6 @@ fn make_chat_request(conv: Vec<ChatCompletionRequestMessage>) -> CreateChatCompl
             ChatCompletionToolArgs::default()
                 .function(
                     FunctionObjectArgs::default()
-                        .name("do_nothing")
-                        .description("If the user did not ask you for anything, call this function instead of responding.")
-                        .parameters(serde_json::json!({"type": "object", "properties": {}}))
-                        .build()
-                        .unwrap(),
-                )
-                .build()
-                .unwrap(),
-            ChatCompletionToolArgs::default()
-                .function(
-                    FunctionObjectArgs::default()
                         .name("nine_plus_ten")
                         .description("Get the answer to the equation `9 + 10`")
                         .parameters(serde_json::json!({"type": "object", "properties": {}}))
@@ -253,10 +242,6 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 for call in tool_calls {
                     info!("{}({})", call.function.name, call.function.arguments);
                     let output = match call.function.name.as_str() {
-                        "do_nothing" => {
-                            typing.stop();
-                            return Ok(());
-                        }
                         "nine_plus_ten" => "21".to_owned(),
                         "random_number" => {
                             let args: RandomNumberArgs =
