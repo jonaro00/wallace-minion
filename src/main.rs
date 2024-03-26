@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use shuttle_secrets::{SecretStore, Secrets};
+use shuttle_runtime::{SecretStore, Secrets};
 
 use discord::build_bot;
 
@@ -12,23 +12,21 @@ mod model;
 mod services;
 
 #[shuttle_runtime::main]
-async fn serenity(
-    #[Secrets] secret_store: SecretStore,
-) -> Result<MyService, shuttle_runtime::Error> {
+async fn serenity(#[Secrets] secrets: SecretStore) -> Result<MyService, shuttle_runtime::Error> {
     // Get the tokens set in `Secrets[.dev].toml`
-    let discord_token = secret_store
+    let discord_token = secrets
         .get("DISCORD_TOKEN")
         .expect("Discord token missing! (env variable `DISCORD_TOKEN`)");
-    let riot_token_lol = secret_store
+    let riot_token_lol = secrets
         .get("RIOT_TOKEN_LOL")
         .expect("Riot token for LoL missing! (env variable `RIOT_TOKEN_LOL`)");
-    let riot_token_tft = secret_store
+    let riot_token_tft = secrets
         .get("RIOT_TOKEN_TFT")
         .expect("Riot token for TFT missing! (env variable `RIOT_TOKEN_TFT`)");
-    let db_url = secret_store
+    let db_url = secrets
         .get("DATABASE_URL")
         .expect("URL for database missing! (env variable `DATABASE_URL`)");
-    let openai_token = secret_store
+    let openai_token = secrets
         .get("OPENAI_TOKEN")
         .expect("OpenAI token missing! (env variable `OPENAI_TOKEN`)");
 

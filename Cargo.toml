@@ -27,8 +27,7 @@ serenity = { version = "=0.12.0", default-features = false, features = [
     "standard_framework",
     "voice",
 ] }
-shuttle-runtime = "0.41.0"
-shuttle-secrets = "0.41.0"
+shuttle-runtime = "0.42.0"
 songbird = { version = "0.4.0", features = ["builtin-queue"] }
 sqlx = { version = "0.7.3", default-features = false, features = ["macros", "postgres", "runtime-tokio", "tls-rustls"] }
 strum = { version = "0.26", features = ["derive"] }
