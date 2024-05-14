@@ -1,6 +1,6 @@
 [package]
 name = "wallace-minion"
-version = "0.13.2"
+version = "0.13.3"
 edition = "2021"
 
 [workspace]
@@ -9,7 +9,7 @@ exclude = ["dep-installer-hack"]
 
 [dependencies]
 anyhow = "1"
-async-openai = "0.19"
+async-openai = "0.21"
 async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4.28", default-features = false }
@@ -27,7 +27,7 @@ serenity = { version = "=0.12.0", default-features = false, features = [
     "standard_framework",
     "voice",
 ] }
-shuttle-runtime = "0.42.0"
+shuttle-runtime = "0.45.0"
 songbird = { version = "0.4.0", features = ["builtin-queue"] }
 sqlx = { version = "0.7.3", default-features = false, features = ["macros", "postgres", "runtime-tokio", "tls-rustls"] }
 strum = { version = "0.26", features = ["derive"] }

@@ -36,7 +36,7 @@ use crate::{
 #[commands(ai, dalle, say, tts)]
 struct AIVoice;
 
-const MODEL: &str = "gpt-4-turbo-preview";
+const MODEL: &str = "gpt-4o";
 const CONVERSATION_HISTORY: usize = 15;
 const WALLACE_PERSONALITY: &str = "
     You are a minion version of Wallace from the animated series Wallace and Gromit.
