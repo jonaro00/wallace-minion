@@ -41,15 +41,15 @@ async fn weekly(ctx: &Context, msg: &Message) -> CommandResult {
 #[min_args(2)]
 #[description("Add summoners to the weekly report.")]
 #[usage("<user> <summoners...>")]
-#[example(r#"@jonaro00 "EUNE:MupDef Crispy" "EUW:WallaceBigBrain""#)]
+#[example(r#"@jonaro00 "EUNE:jonaro00#4191" "EUW:WallaceBigBrain#EUW""#)]
 async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let db = get_db_handler(ctx).await;
     let user = args.current().unwrap().to_owned();
     let target_uid = parse_user_mention(&user).ok_or("Invalid user tag")?.get();
     args.advance();
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
-        let (server, summoner) = match parse_server_summoner(&arg) {
-            Ok(pair) => pair,
+        let (server, name, tag) = match parse_server_name_tag(&arg) {
+            Ok(t) => t,
             Err(err) => {
                 let _ = msg
                     .channel_id
@@ -63,10 +63,10 @@ async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             .say(
                 ctx,
                 match db
-                    .create_lol_account(server.clone(), summoner.clone(), target_uid)
+                    .create_lol_account(server.clone(), name.clone(), tag.clone(), target_uid)
                     .await
                 {
-                    Ok(_) => format!("Adding [{server}] {summoner} to {user}."),
+                    Ok(_) => format!("Adding [{server}] {name}#{tag} to {user}."),
                     Err(err) => format!("Couldn't add {arg}: {err}"),
                 },
             )
@@ -89,13 +89,13 @@ async fn remove(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             .say(
                 ctx,
                 match db
-                    .delete_lol_account(acc.server.clone(), acc.summoner.clone())
+                    .delete_lol_account(acc.server.clone(), acc.name.clone(), acc.tag.clone())
                     .await
                 {
-                    Ok(_) => format!("Removed [{}] {}", acc.server, acc.summoner),
+                    Ok(_) => format!("Removed [{}] {}#{}", acc.server, acc.name, acc.tag),
                     Err(err) => format!(
-                        "Failed to remove [{}] {}: {}",
-                        acc.server, acc.summoner, err
+                        "Failed to remove [{}] {}#{}: {}",
+                        acc.server, acc.name, acc.tag, err
                     ),
                 },
             )
@@ -109,35 +109,36 @@ async fn push_playtime_str(
     client: &RiotAPIClients,
     server: PlatformRoute,
     name: &str,
+    tag: &str,
 ) -> String {
     let region = server.to_regional();
     let puuid_lol = match client
-        .get_summoner_lol(server, name)
+        .get_account_lol(region, name, tag)
         .await
         .map_err(|e| e.to_string())
-        .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))
+        .and_then(|o| o.ok_or_else(|| "Account not found".to_owned()))
     {
         Ok(a) => a,
         Err(e) => {
             s.push_str(&format!(
-                "Couldn't find summmoner {} on {}: {}\n",
-                name, server, e
+                "Couldn't find account {}#{} on {}: {}\n",
+                name, tag, server, e
             ));
             return s;
         }
     }
     .puuid;
     let puuid_tft = match client
-        .get_summoner_tft(server, name)
+        .get_account_tft(region, name, tag)
         .await
         .map_err(|e| e.to_string())
-        .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))
+        .and_then(|o| o.ok_or_else(|| "Account not found".to_owned()))
     {
         Ok(a) => a,
         Err(e) => {
             s.push_str(&format!(
-                "Couldn't find summmoner {} on {}: {}\n",
-                name, server, e
+                "Couldn't find account {}#{} on {}: {}\n",
+                name, tag, server, e
             ));
             return s;
         }
@@ -155,7 +156,7 @@ async fn push_playtime_str(
     let emoji = is_sus(&secs);
     let (hrs, mins, secs) = seconds_to_hms(secs);
     s.push_str(&format!(
-        "[{server}] {name}: {amount} games, {hrs}h{mins}m{secs}s {emoji}\n",
+        "[{server}] {name}#{tag}: {amount} games, {hrs}h{mins}m{secs}s {emoji}\n",
     ));
     s
 }
@@ -165,14 +166,14 @@ async fn push_playtime_str(
 #[min_args(1)]
 #[description("Calculate LoL+TFT playtime for summoner(s).")]
 #[usage("<summoners...>")]
-#[example(r#""EUNE:MupDef Crispy" "EUW:WallaceBigBrain""#)]
+#[example(r#""EUNE:jonaro00#4191" "EUW:WallaceBigBrain#EUW""#)]
 async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let typing = ctx.http.start_typing(msg.channel_id);
     let mut s = String::from("**Weekly playtime:**\n");
     for arg in args.quoted().iter::<String>().filter_map(|s| s.ok()) {
-        let (server, name) = match parse_server_summoner(&arg)
-            .and_then(|(ser, nam)| Ok((PlatformRoute::from_str(&ser)?, nam)))
+        let (server, name, tag) = match parse_server_name_tag(&arg)
+            .and_then(|(ser, name, tag)| Ok((PlatformRoute::from_str(&ser)?, name, tag)))
         {
             Ok(o) => o,
             Err(err) => {
@@ -180,7 +181,7 @@ async fn playtime(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
                 continue;
             }
         };
-        s = push_playtime_str(s, &client, server, &name).await;
+        s = push_playtime_str(s, &client, server, &name, &tag).await;
     }
     typing.stop();
     msg.channel_id.say(ctx, s).await?;
@@ -207,7 +208,7 @@ pub async fn lol_report(ctx: &Context, gc: GuildChannel) -> CommandResult {
                         continue;
                     }
                 };
-                s = push_playtime_str(s, &client, server, &acc.summoner).await;
+                s = push_playtime_str(s, &client, server, &acc.name, &acc.tag).await;
             }
         }
     }
@@ -231,20 +232,21 @@ async fn tft(_ctx: &Context, _msg: &Message, mut _args: Args) -> CommandResult {
 #[num_args(1)]
 #[description("Calculate TFT stats for the current set.")]
 #[usage("<summoner>")]
-#[example(r#""EUW:Thebausffs""#)]
+#[example(r#""EUW:Thebausffs#EUW""#)]
 async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let client = get_riot_client(ctx).await;
     let arg = args.current().unwrap().to_owned();
-    let (server, name) = parse_server_summoner(&arg)
-        .and_then(|(ser, nam)| Ok((PlatformRoute::from_str(&ser)?, nam)))?;
+    let (server, name, tag) = parse_server_name_tag(&arg)
+        .and_then(|(ser, name, tag)| Ok((PlatformRoute::from_str(&ser)?, name, tag)))?;
+    let region = server.to_regional();
     let typing = ctx.http.start_typing(msg.channel_id);
     let puuid_tft = &client
-        .get_summoner_tft(server, &name)
+        .get_account_tft(region, &name, &tag)
         .await
         .map_err(|e| e.to_string())
-        .and_then(|o| o.ok_or_else(|| "Summoner not found".to_owned()))?
+        .and_then(|o| o.ok_or_else(|| "Account not found".to_owned()))?
         .puuid;
-    let ss = client.tft_analysis(server.to_regional(), puuid_tft).await?;
+    let ss = client.tft_analysis(region, puuid_tft).await?;
     typing.stop();
     for s in ss {
         msg.channel_id.say(ctx, s).await?;
@@ -252,12 +254,16 @@ async fn analysis(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     Ok(())
 }
 
-fn parse_server_summoner(
+fn parse_server_name_tag(
     s: &str,
-) -> Result<(String, String), Box<dyn std::error::Error + Sync + Send>> {
-    match s.trim_matches('"').split_once(':') {
+) -> Result<(String, String, String), Box<dyn std::error::Error + Sync + Send>> {
+    match s
+        .trim_matches('"')
+        .split_once(':')
+        .and_then(|(server, name)| name.split_once('#').map(|nt| (server, nt)))
+    {
         None => Err("Incorrect format".to_owned())?,
-        Some((server, name)) => Ok((server.to_owned(), name.to_owned())),
+        Some((server, (name, tag))) => Ok((server.to_owned(), name.to_owned(), tag.to_owned())),
     }
 }
 

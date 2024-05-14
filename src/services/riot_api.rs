@@ -1,12 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use chrono::{Duration, Utc};
-pub use riven::consts::PlatformRoute;
-use riven::{
-    consts::RegionalRoute,
-    models::{summoner_v4, tft_summoner_v1},
-    RiotApi, RiotApiError,
-};
+use riven::{consts::RegionalRoute, models::account_v1, RiotApi, RiotApiError};
 use tracing::trace;
 
 pub struct RiotAPIClients {
@@ -22,28 +17,30 @@ impl RiotAPIClients {
         }
     }
 
-    pub async fn get_summoner_lol(
+    pub async fn get_account_lol(
         &self,
-        server: PlatformRoute,
-        summoner_name: &str,
-    ) -> Result<Option<summoner_v4::Summoner>, RiotApiError> {
+        region: RegionalRoute,
+        name: &str,
+        tag: &str,
+    ) -> Result<Option<account_v1::Account>, RiotApiError> {
         self.client_lol
-            .summoner_v4()
-            .get_by_summoner_name(server, summoner_name)
+            .account_v1()
+            .get_by_riot_id(region, name, tag)
             .await
     }
-    pub async fn get_summoner_tft(
+    pub async fn get_account_tft(
         &self,
-        server: PlatformRoute,
-        summoner_name: &str,
-    ) -> Result<Option<tft_summoner_v1::Summoner>, RiotApiError> {
+        region: RegionalRoute,
+        name: &str,
+        tag: &str,
+    ) -> Result<Option<account_v1::Account>, RiotApiError> {
         self.client_tft
-            .tft_summoner_v1()
-            .get_by_summoner_name(server, summoner_name)
+            .account_v1()
+            .get_by_riot_id(region, name, tag)
             .await
     }
 
-    async fn weekly_playtime_lol(
+    pub async fn weekly_playtime_lol(
         &self,
         region: RegionalRoute,
         puuid: &str,

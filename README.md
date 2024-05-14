@@ -24,7 +24,7 @@ If there is enough interest, I might make a demo server where you can try it out
 
 ### ✨ AI chat with Text-to-Speech 🤖🔊
 
-The `!ai` command lets you chat with Wallace Minion, via ChatGPT (currently `gpt-3.5-turbo`).
+The `!ai` command lets you chat with Wallace Minion, via ChatGPT.
 If you are in a voice channel, Wallace will join and read out the message for you using AWS Polly.
 
 ChatGPT supports many languages.

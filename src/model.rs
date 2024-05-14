@@ -1,7 +1,8 @@
 #[derive(sqlx::FromRow)]
 pub struct LoLAccount {
     pub server: String,
-    pub summoner: String,
+    pub name: String,
+    pub tag: String,
 }
 
 #[derive(sqlx::FromRow)]

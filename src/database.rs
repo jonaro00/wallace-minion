@@ -28,9 +28,14 @@ pub trait WallaceDBClient {
     async fn get_user_mature(self, id: u64) -> Result<bool>;
     async fn set_user_mature(self, id: u64, mature: bool) -> Result<()>;
     async fn get_all_users(self) -> Result<Vec<User>>;
-    async fn create_lol_account(self, server: String, summoner: String, user_id: u64)
-        -> Result<()>;
-    async fn delete_lol_account(self, server: String, summoner: String) -> Result<()>;
+    async fn create_lol_account(
+        self,
+        server: String,
+        name: String,
+        tag: String,
+        user_id: u64,
+    ) -> Result<()>;
+    async fn delete_lol_account(self, server: String, name: String, tag: String) -> Result<()>;
     async fn get_all_lol_accounts_in_user(self, id: u64) -> Result<Vec<LoLAccount>>;
     async fn create_bank_account(self, user_id: u64) -> Result<()>;
     async fn delete_bank_account(self, user_id: u64) -> Result<()>;
@@ -163,31 +168,34 @@ impl WallaceDBClient for &mut PgConnection {
     async fn create_lol_account(
         self,
         server: String,
-        summoner: String,
+        name: String,
+        tag: String,
         user_id: u64,
     ) -> Result<()> {
         let conn = self.acquire().await?;
         conn.upsert_user(user_id).await?;
-        sqlx::query("INSERT INTO lol_account (server, summoner, user_id) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO lol_account (server, name, tag, user_id) VALUES ($1, $2, $3, $4)")
             .bind(server)
-            .bind(summoner)
+            .bind(name)
+            .bind(tag)
             .bind(user_id as i64)
             .execute(&mut *conn)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to create LoL account"))
     }
-    async fn delete_lol_account(self, server: String, summoner: String) -> Result<()> {
-        sqlx::query("DELETE FROM lol_account WHERE server = $1 AND summoner = $2")
+    async fn delete_lol_account(self, server: String, name: String, tag: String) -> Result<()> {
+        sqlx::query("DELETE FROM lol_account WHERE server = $1 AND name = $2 AND tag = $3")
             .bind(server)
-            .bind(summoner)
+            .bind(name)
+            .bind(tag)
             .execute(self)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to delete LoL account"))
     }
     async fn get_all_lol_accounts_in_user(self, id: u64) -> Result<Vec<LoLAccount>> {
-        sqlx::query_as::<_, LoLAccount>(r#"SELECT l.server, l.summoner FROM "user" u JOIN lol_account l ON u.id = l.user_id WHERE u.id = $1"#)
+        sqlx::query_as::<_, LoLAccount>(r#"SELECT l.server, l.name, l.tag FROM "user" u JOIN lol_account l ON u.id = l.user_id WHERE u.id = $1"#)
             .bind(id as i64)
             .fetch_all(self)
             .await
@@ -363,15 +371,16 @@ impl WallaceDBClient for &Arc<PgPool> {
     async fn create_lol_account(
         self,
         server: String,
-        summoner: String,
+        name: String,
+        tag: String,
         user_id: u64,
     ) -> Result<()> {
         let mut conn = self.acquire().await?;
-        conn.create_lol_account(server, summoner, user_id).await
+        conn.create_lol_account(server, name, tag, user_id).await
     }
-    async fn delete_lol_account(self, server: String, summoner: String) -> Result<()> {
+    async fn delete_lol_account(self, server: String, name: String, tag: String) -> Result<()> {
         let mut conn = self.acquire().await?;
-        conn.delete_lol_account(server, summoner).await
+        conn.delete_lol_account(server, name, tag).await
     }
     async fn get_all_lol_accounts_in_user(self, id: u64) -> Result<Vec<LoLAccount>> {
         let mut conn = self.acquire().await?;

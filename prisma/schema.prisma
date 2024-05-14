@@ -1,8 +1,3 @@
-generator client {
-  provider = "cargo prisma"
-  output   = "../src/prisma.rs"
-}
-
 datasource db {
   provider          = "postgresql"
   url               = env("DATABASE_URL")
@@ -28,11 +23,12 @@ model guild {
 }
 
 model lol_account {
-  id       Int    @id @default(autoincrement())
-  server   String @db.VarChar(10)
-  summoner String @db.VarChar(100)
-  user_id  BigInt
-  user     user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id      Int    @id @default(autoincrement())
+  server  String @db.VarChar(10)
+  name    String @db.VarChar(100)
+  tag     String @db.VarChar(100)
+  user_id BigInt
+  user    user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model rn_object {
