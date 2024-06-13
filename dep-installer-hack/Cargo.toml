@@ -10,4 +10,4 @@ publish = false
 [workspace]
 
 [dependencies]
-shuttle-runtime = "0.45.0"
+shuttle-runtime = "0.46.0"
