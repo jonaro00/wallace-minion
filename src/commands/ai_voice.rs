@@ -3,8 +3,9 @@ use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs,
     ChatCompletionRequestUserMessageArgs, ChatCompletionToolArgs, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, CreateImageRequestArgs, CreateModerationRequestArgs,
-    CreateSpeechRequestArgs, FinishReason, FunctionObjectArgs, Image, ImageModel, ImageSize,
-    ImageStyle, ResponseFormat, SpeechModel, SpeechResponseFormat, TextModerationModel, Voice,
+    CreateSpeechRequestArgs, FinishReason, FunctionObjectArgs, Image, ImageModel,
+    ImageResponseFormat, ImageSize, ImageStyle, SpeechModel, SpeechResponseFormat,
+    TextModerationModel, Voice,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -385,7 +386,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         .model(ImageModel::DallE3)
         .prompt(input)
         .n(1)
-        .response_format(ResponseFormat::B64Json)
+        .response_format(ImageResponseFormat::B64Json)
         .size(ImageSize::S1024x1024)
         .style(ImageStyle::Vivid)
         .user("async-openai")

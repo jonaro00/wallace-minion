@@ -17,5 +17,6 @@ pub struct Task {
 #[derive(sqlx::FromRow)]
 pub struct User {
     pub id: i64,
+    #[allow(unused)]
     pub mature: bool,
 }
