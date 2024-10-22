@@ -4,3 +4,5 @@ target*
 Secrets*.toml
 release.sh
 dep-installer-hack/Cargo.lock
+/target
+.shuttle*

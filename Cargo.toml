@@ -4,8 +4,8 @@ version = "0.13.4"
 edition = "2021"
 
 [workspace]
+resolver = "2"
 members = [".", "prisma-cli"]
-exclude = ["dep-installer-hack"]
 
 [dependencies]
 anyhow = "1"
