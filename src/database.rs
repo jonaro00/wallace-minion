@@ -89,12 +89,11 @@ impl WallaceDBClient for &mut PgConnection {
             .ok_or_else(|| anyhow!("No default name"))
     }
     async fn get_guild_random_names(self, id: u64) -> Result<(Vec<String>, Vec<String>)> {
-        let conn = self.acquire().await?;
         let subs = sqlx::query_as::<_, (String,)>(
             "SELECT r.value FROM guild g JOIN rn_subject r ON g.id = r.guild_id WHERE id = $1",
         )
         .bind(id as i64)
-        .fetch_all(&mut *conn)
+        .fetch_all(self.as_mut())
         .await
         .map_err(|r| log_error(r, "Failed to fetch subjects"))?
         .into_iter()
@@ -104,7 +103,7 @@ impl WallaceDBClient for &mut PgConnection {
             "SELECT r.value FROM guild g JOIN rn_object r ON g.id = r.guild_id WHERE id = $1",
         )
         .bind(id as i64)
-        .fetch_all(&mut *conn)
+        .fetch_all(self)
         .await
         .map_err(|r| log_error(r, "Failed to fetch objects"))?
         .into_iter()
@@ -113,23 +112,21 @@ impl WallaceDBClient for &mut PgConnection {
         Ok((subs, objs))
     }
     async fn add_guild_random_name_subject(self, id: u64, value: String) -> Result<()> {
-        let conn = self.acquire().await?;
-        conn.upsert_guild(id).await?;
+        self.upsert_guild(id).await?;
         sqlx::query("INSERT INTO rn_subject VALUES ($1, $2)")
             .bind(id as i64)
             .bind(value)
-            .execute(&mut *conn)
+            .execute(self)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to create subject"))
     }
     async fn add_guild_random_name_object(self, id: u64, value: String) -> Result<()> {
-        let conn = self.acquire().await?;
-        conn.upsert_guild(id).await?;
+        self.upsert_guild(id).await?;
         sqlx::query("INSERT INTO rn_object VALUES ($1, $2)")
             .bind(id as i64)
             .bind(value)
-            .execute(&mut *conn)
+            .execute(self)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to create object"))
@@ -172,14 +169,13 @@ impl WallaceDBClient for &mut PgConnection {
         tag: String,
         user_id: u64,
     ) -> Result<()> {
-        let conn = self.acquire().await?;
-        conn.upsert_user(user_id).await?;
+        self.upsert_user(user_id).await?;
         sqlx::query("INSERT INTO lol_account (server, name, tag, user_id) VALUES ($1, $2, $3, $4)")
             .bind(server)
             .bind(name)
             .bind(tag)
             .bind(user_id as i64)
-            .execute(&mut *conn)
+            .execute(self)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to create LoL account"))
@@ -202,11 +198,10 @@ impl WallaceDBClient for &mut PgConnection {
             .map_err(|q| log_error(q, "Failed to get LoL accounts"))
     }
     async fn create_bank_account(self, user_id: u64) -> Result<()> {
-        let conn = self.acquire().await?;
-        conn.upsert_user(user_id).await?;
+        self.upsert_user(user_id).await?;
         sqlx::query("INSERT INTO bank_account (user_id) VALUES ($1) ON CONFLICT DO NOTHING")
             .bind(user_id as i64)
-            .execute(&mut *conn)
+            .execute(self)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to create bank account"))
@@ -292,14 +287,13 @@ impl WallaceDBClient for &mut PgConnection {
         arg: Option<String>,
         channel_id: u64,
     ) -> Result<()> {
-        let conn = self.acquire().await?;
-        conn.upsert_channel(channel_id).await?;
+        self.upsert_channel(channel_id).await?;
         sqlx::query("INSERT INTO task (cron, cmd, arg, channel_id) VALUES ($1, $2, $3, $4)")
             .bind(cron)
             .bind(cmd)
             .bind(arg)
             .bind(channel_id as i64)
-            .execute(&mut *conn)
+            .execute(self)
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to create task"))
