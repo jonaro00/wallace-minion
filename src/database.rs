@@ -239,16 +239,18 @@ impl WallaceDBClient for &mut PgConnection {
     }
     async fn subtract_bank_account_balance(self, user_id: u64, amount: i64) -> Result<()> {
         positive(amount)?;
-        let mut tr = self.begin().await?;
-        (&mut tr).has_bank_account_balance(user_id, amount).await?;
+        let mut trx = self.begin().await?;
+        trx.as_mut()
+            .has_bank_account_balance(user_id, amount)
+            .await?;
         sqlx::query("UPDATE bank_account SET balance = balance - $1 WHERE user_id = $2")
             .bind(amount)
             .bind(user_id as i64)
-            .execute(&mut *tr)
+            .execute(trx.as_mut())
             .await
             .map(|_| ())
             .map_err(|q| log_error(q, "Failed to update balance"))?;
-        tr.commit().await?;
+        trx.commit().await?;
         Ok(())
     }
     async fn transfer_bank_account_balance(
@@ -260,14 +262,14 @@ impl WallaceDBClient for &mut PgConnection {
         if from_user_id == to_user_id {
             return Err(anyhow!("Can't transfer to self"));
         }
-        let mut tr = self.begin().await?;
-        (&mut tr)
+        let mut trx = self.begin().await?;
+        trx.as_mut()
             .subtract_bank_account_balance(from_user_id, amount)
             .await?;
-        (&mut tr)
+        trx.as_mut()
             .add_bank_account_balance(to_user_id, amount)
             .await?;
-        tr.commit().await?;
+        trx.commit().await?;
         Ok(())
     }
     async fn upsert_channel(self, id: u64) -> Result<()> {
