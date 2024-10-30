@@ -135,7 +135,7 @@ pub async fn build_bot(
             &riot_token_lol,
             &riot_token_tft,
         )));
-        data.insert::<WallaceDB>(Arc::new(db));
+        data.insert::<WallaceDB>(db);
         data.insert::<WallaceOpenAI>(Arc::new(OpenAIClient::with_config(
             OpenAIConfig::new().with_api_key(openai_token),
         )));
@@ -177,7 +177,7 @@ pub async fn get_riot_client(ctx: &Context) -> TWallaceRiot {
 }
 
 struct WallaceDB;
-type TWallaceDB = Arc<PgPool>;
+type TWallaceDB = PgPool;
 impl TypeMapKey for WallaceDB {
     type Value = TWallaceDB;
 }

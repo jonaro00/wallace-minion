@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::{anyhow, Error, Result};
 use sqlx::{Acquire, PgConnection, PgPool};
 use tracing::warn;
@@ -321,7 +319,7 @@ impl WallaceDBClient for &mut PgConnection {
     }
 }
 
-impl WallaceDBClient for &Arc<PgPool> {
+impl WallaceDBClient for &PgPool {
     async fn upsert_guild(self, id: u64) -> Result<()> {
         let mut conn = self.acquire().await?;
         conn.upsert_guild(id).await
