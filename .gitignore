@@ -6,3 +6,4 @@ release.sh
 dep-installer-hack/Cargo.lock
 /target
 .shuttle*
+private
