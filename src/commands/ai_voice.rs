@@ -4,8 +4,7 @@ use async_openai::types::{
     ChatCompletionRequestUserMessageArgs, ChatCompletionToolArgs, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, CreateImageRequestArgs, CreateModerationRequestArgs,
     CreateSpeechRequestArgs, FinishReason, FunctionObjectArgs, Image, ImageModel,
-    ImageResponseFormat, ImageSize, ImageStyle, SpeechModel, SpeechResponseFormat,
-    TextModerationModel, Voice,
+    ImageResponseFormat, ImageSize, ImageStyle, SpeechModel, SpeechResponseFormat, Voice,
 };
 use async_trait::async_trait;
 use rand::Rng;
@@ -180,7 +179,7 @@ async fn ai(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     // check moderation policy
     let request = CreateModerationRequestArgs::default()
         .input(input)
-        .model(TextModerationModel::Latest)
+        .model("omni-moderation-latest")
         .build()
         .unwrap();
     let response = client.moderations().create(request).await?;
@@ -366,7 +365,7 @@ async fn dalle(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     // check moderation policy
     let request = CreateModerationRequestArgs::default()
         .input(input)
-        .model(TextModerationModel::Latest)
+        .model("omni-moderation-latest")
         .build()
         .unwrap();
     let response = client.moderations().create(request).await?;

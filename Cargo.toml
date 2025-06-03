@@ -9,7 +9,7 @@ members = [".", "prisma-cli"]
 
 [dependencies]
 anyhow = "1"
-async-openai = "0.25"
+async-openai = "0.28"
 async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4.28", default-features = false }
@@ -27,10 +27,10 @@ serenity = { version = "=0.12.0", default-features = false, features = [
     "standard_framework",
     "voice",
 ] }
-shuttle-runtime = "0.52.0"
+shuttle-runtime = "0.55.0"
 songbird = { version = "0.4.0", features = ["builtin-queue"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["macros", "postgres", "runtime-tokio", "tls-rustls"] }
-strum = { version = "0.26", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
 symphonia = { version = "0.5.3", default-features = false, features = ["ogg"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
