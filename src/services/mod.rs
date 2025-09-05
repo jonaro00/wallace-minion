@@ -16,7 +16,7 @@ use cool_text::{to_cool_text, Font};
 
 use crate::{database::WallaceDBClient, discord::get_db_handler};
 
-pub async fn set_server_name<'a>(
+pub async fn set_server_name(
     ctx: &Context,
     mut guild: Guild,
     reply_to: Option<&Message>,

@@ -256,7 +256,7 @@ impl RiotAPIClients {
 }
 
 fn last_part(s: String) -> String {
-    s.split_terminator('_').last().unwrap_or("???").to_owned()
+    s.split_terminator('_').next_back().unwrap_or("???").to_owned()
 }
 
 #[derive(Debug)]

@@ -311,7 +311,7 @@ pub fn random_name(subs: Vec<String>, objs: Vec<String>) -> String {
     } else {
         &subs[rng.gen_range(0..subs.len())]
     };
-    let s = if sub.ends_with(|c: char| c.to_ascii_lowercase() == 's') {
+    let s = if sub.ends_with(|c: char| c.eq_ignore_ascii_case(&'s')) {
         ""
     } else {
         "s"
